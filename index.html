@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>DP Coach</title>
+<title>Cinematography Coach</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -113,15 +113,6 @@
     padding: 14px 32px; width: 100%; max-width: 420px;
     border: 1px solid rgba(74,158,237,0.4);
     font-size: 17px;
-  }
-
-  /* ── CHIPS (parsed intent display) ── */
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-  .chip {
-    background: rgba(232,200,74,0.12); border: 1px solid rgba(232,200,74,0.3);
-    border-radius: 100px; color: var(--accent);
-    font-size: 12px; font-weight: 600; padding: 4px 12px;
-    letter-spacing: 0.04em;
   }
 
   /* ── LATENCY / STATUS BADGE ── */
@@ -235,52 +226,6 @@
   }
   .hint-box strong { color: var(--blue); }
 
-  /* ── MODE SELECT CARDS ── */
-  .mode-cards {
-    display: flex; gap: 14px; width: 100%; max-width: 420px; z-index: 2;
-  }
-  .mode-card {
-    flex: 1; position: relative;
-    background: rgba(14,14,14,0.88);
-    backdrop-filter: blur(20px) saturate(1.4);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 22px 16px;
-    display: flex; flex-direction: column; align-items: center; gap: 10px;
-    cursor: pointer; user-select: none;
-    -webkit-tap-highlight-color: transparent;
-    transition: border-color 0.2s, background 0.2s, transform 0.1s;
-  }
-  .mode-card:active { transform: scale(0.97); }
-  .mode-card.discover { border-color: rgba(74,158,237,0.35); }
-  .mode-card.shoot    { border-color: rgba(232,200,74,0.35); }
-  .mode-card.discover:hover, .mode-card.discover:focus {
-    background: rgba(74,158,237,0.08); border-color: rgba(74,158,237,0.6);
-  }
-  .mode-card.shoot:hover, .mode-card.shoot:focus {
-    background: rgba(232,200,74,0.08); border-color: rgba(232,200,74,0.6);
-  }
-  .mode-icon { font-size: 28px; line-height: 1; }
-  .mode-title {
-    font-size: 13px; font-weight: 700; letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-  .mode-card.discover .mode-title { color: var(--blue); }
-  .mode-card.shoot    .mode-title { color: var(--accent); }
-  .mode-sub {
-    font-size: 12px; color: var(--muted); text-align: center; line-height: 1.4;
-  }
-
-  /* ── MODE INDICATOR ── */
-  #mode-pill {
-    position: fixed; top: 16px; right: 16px; z-index: 20;
-    background: rgba(232,200,74,0.15);
-    border: 1px solid rgba(232,200,74,0.4);
-    border-radius: 100px; padding: 3px 10px;
-    font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
-    color: var(--accent); text-transform: uppercase;
-  }
-
   /* ── TYPOGRAPHY HELPERS ── */
   h2 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; text-align: center; z-index: 2; }
   h2 small { display: block; font-size: 14px; font-weight: 400; color: var(--muted); margin-top: 4px; }
@@ -329,7 +274,6 @@
 <div id="camera-bg"><video id="video" autoplay playsinline muted></video></div>
 <div id="overlay"></div>
 <div id="land-flash"></div>
-<div id="mode-pill">MOCK</div>
 
 <!-- Reticle: global layer, shown on lock + hint screens -->
 <div id="lock-reticle" style="display:none">
@@ -349,37 +293,15 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════
-     SCREEN 0: MODE SELECT
+     SCREEN 0: SETUP
 ═══════════════════════════════════════════════ -->
-<div id="screen-mode" class="screen active">
-  <h2 style="z-index:2">DP Coach<small>Real-time cinematography · Overshoot AI</small></h2>
-  <p class="sub" style="z-index:2">What would you like to do?</p>
-  <div class="mode-cards">
-    <div class="mode-card discover" id="btn-mode-discover" role="button" tabindex="0">
-      <div class="mode-title">Discover</div>
-      <div class="mode-sub">Sweep the room for shot opportunities</div>
-    </div>
-    <div class="mode-card shoot" id="btn-mode-shoot" role="button" tabindex="0">
-      <div class="mode-title">Shoot</div>
-      <div class="mode-sub">Execute a specific shot with live coaching</div>
-    </div>
-  </div>
-</div>
+<div id="screen-setup" class="screen active">
+  <h2 style="z-index:2">Cinematography Coach<small>Real-time cinematography guidance</small></h2>
 
-<!-- ═══════════════════════════════════════════════
-     SCREEN 1: SETUP
-═══════════════════════════════════════════════ -->
-<div id="screen-setup" class="screen">
-  <button class="btn btn-secondary" id="btn-back-to-mode"
-    style="position:absolute;top:52px;left:20px;z-index:10;max-width:80px;padding:8px 14px;font-size:13px;">
-    ← Back
-  </button>
-
-  <div class="card" style="z-index:2;margin-top:40px">
-    <div class="card-title" id="prompt-label">Describe your shot</div>
+  <div class="card" style="z-index:2">
+    <div class="card-title" id="prompt-label">What are you looking for?</div>
     <textarea id="shot-input" rows="3"
-      placeholder="e.g. Wes Anderson symmetric, slow dolly in"></textarea>
-    <div class="chips" id="intent-chips" style="margin-top:10px"></div>
+      placeholder="e.g. find spots for a Wes Anderson symmetric shot"></textarea>
   </div>
 
   <button class="btn btn-primary" id="btn-start">Start Camera &amp; Continue →</button>
@@ -414,7 +336,6 @@
     <div class="card-title">Shot &amp; move</div>
     <textarea id="shot-move-input" rows="2"
       placeholder="e.g. slow dolly in, Wes Anderson push"></textarea>
-    <div class="chips" id="shot-move-chips" style="margin-top:10px"></div>
   </div>
   <button class="btn btn-primary" id="btn-confirm-shot">Set Starting Position →</button>
   <button class="btn btn-danger" id="btn-cancel-shot" style="max-width:220px">✕ Cancel &amp; Start Over</button>
@@ -426,11 +347,7 @@
 <div id="screen-hint" class="screen" style="background:rgba(0,0,0,0.72);">
   <h2>Get into position</h2>
   <div class="hint-box" id="hint-text">
-    Back up until the subject looks comfortably small.
-  </div>
-  <div class="card" style="gap:12px; display:flex; flex-direction:column;">
-    <div class="card-title">Your shot</div>
-    <div class="chips" id="hint-chips"></div>
+    Get into your starting position.
   </div>
   <button class="btn btn-primary" id="btn-go">▶ Go — Start Move</button>
   <button class="btn btn-danger" id="btn-cancel-hint">✕ Cancel</button>
