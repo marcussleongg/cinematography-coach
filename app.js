@@ -1,9 +1,9 @@
 import { Room, createLocalVideoTrack } from "https://esm.sh/livekit-client@2";
 
 // ════════════════════════════════════════════════════════════════
-//  MOCK PROVIDER  (Phase 0 — inference stays mocked until Phase 4)
+//  VISION PROVIDER  (mock → live based on stream + target availability)
 // ════════════════════════════════════════════════════════════════
-const MODE = "mock";
+const MOVE_MODEL = "Qwen/Qwen3.6-27B-FP8";
 
 let _tick = 0;
 function cannedResult(intent) {
@@ -38,12 +38,70 @@ function cannedResult(intent) {
   };
 }
 
+function buildMovePrompt(intent) {
+  const director = intent.director || "cinematic";
+  const move     = intent.moveType?.replace("_", " ") || "move";
+  return `Image1=target frame. Image2=live camera. ${director} style, ${move}.
+Respond JSON only: {"landing":0-1,"composition":0-1,"timing":0-1,"cue":"≤6 words"|null}
+landing=how close Image2 matches Image1, 1 = match. cue=null only if landing>=0.85.`;
+}
+
+async function queryOvershoot(intent) {
+  const targetUrl = `ovs://streams/${targetFrameRef.streamId}?frame_index=${targetFrameRef.frameIndex}`;
+  // we are looking at the last 2 seconds of the stream with fps 2, so 4 frames in total
+  const liveUrl   = `ovs://streams/${streamId}?start_offset_ms=-2000&max_fps=2`;
+
+  const body = {
+    model: MOVE_MODEL,
+    messages: [{
+      role: "user",
+      content: [
+        { type: "image_url", image_url: { url: targetUrl } },  // Image 1: target
+        { type: "video_url", video_url: { url: liveUrl } },    // Image 2: live window
+        { type: "text",      text: buildMovePrompt(intent) },
+      ],
+    }],
+    max_tokens: 80,
+    response_format: { type: "json_object" },
+  };
+
+  const t0 = performance.now();
+  const r  = await fetch("/api/query", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const latency_ms = Math.round(performance.now() - t0);
+
+  if (!r.ok) throw new Error(`Query ${r.status}: ${await r.text()}`);
+
+  const data    = await r.json();
+  const content = data?.choices?.[0]?.message?.content ?? "";
+  const clean   = content.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+  const parsed  = JSON.parse(clean);
+
+  return {
+    landing:     clamp(parsed.landing     ?? 0, 0, 1),
+    composition: clamp(parsed.composition ?? 0, 0, 1),
+    timing:      clamp(parsed.timing      ?? 0, 0, 1),
+    cue:         parsed.cue || null,
+    latency_ms,
+  };
+}
+
 async function getVisionResult(intent) {
-  if (MODE === "mock") {
-    await new Promise(r => setTimeout(r, 60 + Math.random() * 120));
-    return cannedResult(intent);
+  // Use real inference when we have a live stream + a real locked frame index
+  if (streamId && targetFrameRef?.frameIndex != null) {
+    try {
+      return await queryOvershoot(intent);
+    } catch (e) {
+      console.warn("Inference failed, using mock fallback:", e);
+      return cannedResult(intent);  // keep loop alive on transient errors
+    }
   }
-  throw new Error("Provider not implemented");
+  // Mock fallback: no stream or no locked frame yet
+  await new Promise(r => setTimeout(r, 60 + Math.random() * 120));
+  return cannedResult(intent);
 }
 
 
@@ -465,6 +523,7 @@ document.getElementById("btn-back-to-setup").addEventListener("click", () => tra
 document.getElementById("btn-go").addEventListener("click", () => {
   transition("move");
   startTone();
+  if (streamId && targetFrameRef?.frameIndex != null) setModePill("LIVE", "var(--green)");
   speak("Moving. " + (intent.director ? intent.director + " style." : ""));
   runMoveLoop();
 });
