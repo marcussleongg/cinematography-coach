@@ -1,4 +1,4 @@
-import { Room, createLocalVideoTrack } from "https://esm.sh/livekit-client@2";
+import { Room, LocalVideoTrack } from "https://esm.sh/livekit-client@2";
 
 // ════════════════════════════════════════════════════════════════
 //  VISION PROVIDER  (mock → live based on stream + target availability)
@@ -212,7 +212,8 @@ async function setupStream() {
 
     livekitRoom = new Room();
     await livekitRoom.connect(data.publish.url, data.publish.token);
-    const track = await createLocalVideoTrack({ width: 854, height: 480, frameRate: 15 });
+    const mediaTrack = cameraStream.getVideoTracks()[0];
+    const track = new LocalVideoTrack(mediaTrack);
     await livekitRoom.localParticipant.publishTrack(track);
 
     setModePill("STREAM", "var(--green)");
