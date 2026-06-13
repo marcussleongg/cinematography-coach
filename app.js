@@ -188,6 +188,8 @@ function transition(to) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
   document.getElementById(`screen-${to.toLowerCase()}`).classList.add("active");
   state = to.toUpperCase();
+  const showReticle = to === "lock" || to === "hint";
+  document.getElementById("lock-reticle").style.display = showReticle ? "flex" : "none";
 }
 
 
@@ -271,6 +273,7 @@ const SPEECH_MIN_INTERVAL_MS = 2000;
 function unlockAudio() {
   if (audioCtx) return;
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  audioCtx.resume();  // iOS often starts AudioContext suspended even inside a gesture handler
   gainNode = audioCtx.createGain();
   gainNode.gain.value = 0;
   panner = audioCtx.createStereoPanner();
@@ -279,6 +282,14 @@ function unlockAudio() {
   osc.frequency.value = 220;
   osc.connect(panner).connect(gainNode).connect(audioCtx.destination);
   osc.start();
+
+  // Pre-warm SpeechSynthesis — iOS silences the very first utterance unless
+  // a speak/cancel cycle happens synchronously inside a user gesture
+  if (window.speechSynthesis) {
+    const warm = new SpeechSynthesisUtterance("");
+    window.speechSynthesis.speak(warm);
+    window.speechSynthesis.cancel();
+  }
 }
 
 function startTone() {
@@ -330,15 +341,15 @@ function playLandChime() {
 function speak(text) {
   if (!window.speechSynthesis) return;
   const now = Date.now();
-  if (text === lastSpokenCue) return;                         // same cue: silent until it changes
-  if (speechBusy) return;                                     // don't queue behind in-flight speech
-  if (now - lastCueTime < SPEECH_MIN_INTERVAL_MS) return;    // 5s floor between any utterances
+  if (text === lastSpokenCue) return;
+  if (now - lastCueTime < SPEECH_MIN_INTERVAL_MS) return;
   lastSpokenCue = text;
   lastCueTime = now;
+  // Resume AudioContext if iOS suspended it mid-session
+  if (audioCtx?.state === "suspended") audioCtx.resume();
+  window.speechSynthesis.cancel();  // clear any stuck queue before speaking
   const utt = new SpeechSynthesisUtterance(text);
   utt.rate = 1.1; utt.pitch = 1.0; utt.volume = 0.85;
-  utt.onend = utt.onerror = () => { speechBusy = false; };
-  speechBusy = true;
   window.speechSynthesis.speak(utt);
 }
 
@@ -613,9 +624,6 @@ document.getElementById("btn-start").addEventListener("click", async () => {
   }
   await startCamera();
   await setupStream();
-  document.getElementById("lock-intent-badge").textContent = discoverIntent
-    ? "Discovering · " + discoverIntent.raw.slice(0, 22) + (discoverIntent.raw.length > 22 ? "…" : "")
-    : (intent.director || intent.moveType?.replace("_", " ") || intent.raw?.slice(0, 24) || "Custom");
   const scoutHud = document.getElementById("scout-hud");
   scoutHud.style.display = scoutEnabled ? "flex" : "none";
   if (scoutEnabled) runScoutLoop();

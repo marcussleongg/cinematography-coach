@@ -331,6 +331,23 @@
 <div id="land-flash"></div>
 <div id="mode-pill">MOCK</div>
 
+<!-- Reticle: global layer, shown on lock + hint screens -->
+<div id="lock-reticle" style="display:none">
+  <svg id="reticle-grid" viewBox="0 0 100 100" preserveAspectRatio="none">
+    <line x1="33.33" y1="0" x2="33.33" y2="100" stroke="rgba(255,255,255,0.18)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+    <line x1="66.67" y1="0" x2="66.67" y2="100" stroke="rgba(255,255,255,0.18)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+    <line x1="0" y1="33.33" x2="100" y2="33.33" stroke="rgba(255,255,255,0.18)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+    <line x1="0" y1="66.67" x2="100" y2="66.67" stroke="rgba(255,255,255,0.18)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+  </svg>
+  <svg id="reticle-cross" width="36" height="36" viewBox="0 0 36 36">
+    <line x1="18" y1="4" x2="18" y2="12" stroke="#4a9eed" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+    <line x1="18" y1="24" x2="18" y2="32" stroke="#4a9eed" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+    <line x1="4" y1="18" x2="12" y2="18" stroke="#4a9eed" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+    <line x1="24" y1="18" x2="32" y2="18" stroke="#4a9eed" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+    <circle cx="18" cy="18" r="1.5" fill="#4a9eed" opacity="0.8"/>
+  </svg>
+</div>
+
 <!-- ═══════════════════════════════════════════════
      SCREEN 0: MODE SELECT
 ═══════════════════════════════════════════════ -->
@@ -373,34 +390,8 @@
      SCREEN 2: LOCK — frame your hero shot
 ═══════════════════════════════════════════════ -->
 <div id="screen-lock" class="screen">
-  <div id="lock-reticle">
-    <!-- Rule of thirds grid (full viewport, non-scaling strokes) -->
-    <svg id="reticle-grid" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <line x1="33.33" y1="0" x2="33.33" y2="100" stroke="rgba(255,255,255,0.18)" stroke-width="1" vector-effect="non-scaling-stroke"/>
-      <line x1="66.67" y1="0" x2="66.67" y2="100" stroke="rgba(255,255,255,0.18)" stroke-width="1" vector-effect="non-scaling-stroke"/>
-      <line x1="0" y1="33.33" x2="100" y2="33.33" stroke="rgba(255,255,255,0.18)" stroke-width="1" vector-effect="non-scaling-stroke"/>
-      <line x1="0" y1="66.67" x2="100" y2="66.67" stroke="rgba(255,255,255,0.18)" stroke-width="1" vector-effect="non-scaling-stroke"/>
-    </svg>
-    <!-- Small centered crosshair -->
-    <svg id="reticle-cross" width="36" height="36" viewBox="0 0 36 36">
-      <line x1="18" y1="4" x2="18" y2="12" stroke="#4a9eed" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
-      <line x1="18" y1="24" x2="18" y2="32" stroke="#4a9eed" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
-      <line x1="4" y1="18" x2="12" y2="18" stroke="#4a9eed" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
-      <line x1="24" y1="18" x2="32" y2="18" stroke="#4a9eed" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
-      <circle cx="18" cy="18" r="1.5" fill="#4a9eed" opacity="0.8"/>
-    </svg>
-  </div>
-
-  <div style="position:fixed; top:0; left:0; right:0; z-index:10;
-    padding: 52px 20px 0; display:flex; flex-direction:column; align-items:center; gap:8px;">
-    <div class="badge" id="lock-intent-badge">–</div>
-  </div>
-
   <div style="position:fixed; bottom:0; left:0; right:0; z-index:10;
     padding: 0 20px 40px; display:flex; flex-direction:column; align-items:center; gap:16px;">
-    <p style="font-size:13px; color:rgba(255,255,255,0.5); text-align:center; max-width:280px;">
-      Frame your <strong style="color:#fff">hero shot</strong> — this becomes your locked target
-    </p>
     <div id="scout-hud" style="display:none;flex-direction:column;gap:8px;width:100%;max-width:340px;">
       <div class="score-bar-wrap" style="max-width:none">
         <div class="score-label">Composition</div>
@@ -432,7 +423,7 @@
 <!-- ═══════════════════════════════════════════════
      SCREEN 3: START-POSITION HINT + GO
 ═══════════════════════════════════════════════ -->
-<div id="screen-hint" class="screen">
+<div id="screen-hint" class="screen" style="background:rgba(0,0,0,0.72);">
   <h2>Get into position</h2>
   <div class="hint-box" id="hint-text">
     Back up until the subject looks comfortably small.
