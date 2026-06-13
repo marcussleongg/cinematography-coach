@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>DP Coach · Prompt Tester</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0a; --surface: #141414; --border: #2a2a2a;
+    --text: #f0f0f0; --muted: #666; --accent: #e8c84a;
+    --green: #4aed8a; --red: #ed4a4a; --blue: #4a9eed;
+    --radius: 12px;
+    --font: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+  }
+  html, body {
+    min-height: 100%; background: var(--bg); color: var(--text);
+    font-family: var(--font); padding: 24px 16px 48px;
+  }
+  h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  h1 small { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 8px; }
+  .section-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px;
+  }
+  /* director chips */
+  .director-grid {
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .dir-chip {
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+    border-radius: 100px; color: var(--muted);
+    font-size: 13px; font-weight: 500; padding: 6px 14px;
+    cursor: pointer; transition: all 0.15s; user-select: none;
+  }
+  .dir-chip.active {
+    background: rgba(232,200,74,0.12); border-color: rgba(232,200,74,0.5);
+    color: var(--accent);
+  }
+  /* photo area */
+  #photo-wrap {
+    width: 100%; aspect-ratio: 16/9; border-radius: 10px;
+    background: #111; border: 2px dashed var(--border);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; position: relative; cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  #photo-wrap:hover { border-color: var(--accent); }
+  #photo-wrap img { width: 100%; height: 100%; object-fit: cover; display: none; }
+  #photo-wrap .placeholder {
+    text-align: center; color: var(--muted); font-size: 14px; line-height: 1.8;
+  }
+  #photo-wrap .placeholder strong { display: block; font-size: 24px; margin-bottom: 4px; }
+  #file-input { display: none; }
+  /* buttons */
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    border: none; border-radius: 100px; font-family: var(--font);
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: transform 0.1s, opacity 0.15s; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.4; pointer-events: none; }
+  .btn-primary { background: var(--accent); color: #000; padding: 14px 28px; width: 100%; }
+  .btn-secondary {
+    background: rgba(255,255,255,0.06); color: var(--text);
+    padding: 11px 20px; border: 1px solid var(--border); font-size: 13px;
+  }
+  .btn-row { display: flex; gap: 10px; margin-bottom: 14px; }
+  /* score bars */
+  .score-row {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 10px;
+  }
+  .score-key {
+    font-size: 12px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    width: 110px; flex-shrink: 0;
+  }
+  .score-bar {
+    flex: 1; height: 6px; border-radius: 3px;
+    background: rgba(255,255,255,0.08); overflow: hidden;
+  }
+  .score-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(to right, var(--red), var(--accent), var(--green));
+    transition: width 0.5s cubic-bezier(.25,.46,.45,.94);
+    width: 0%;
+  }
+  .score-val {
+    font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+    width: 32px; text-align: right; color: var(--text);
+  }
+  /* cue */
+  #cue-box {
+    background: rgba(74,158,237,0.1); border: 1px solid rgba(74,158,237,0.3);
+    border-radius: 10px; padding: 12px 16px;
+    font-size: 15px; color: #b0ccee; display: none; margin-bottom: 14px;
+  }
+  #cue-box strong { color: var(--blue); }
+  /* raw json */
+  #raw-json {
+    background: #0d0d0d; border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px; font-family: 'SF Mono', monospace;
+    font-size: 12px; color: #8fbf8f; white-space: pre-wrap;
+    word-break: break-all; display: none; margin-bottom: 14px;
+    max-height: 260px; overflow-y: auto;
+  }
+  /* latency / status */
+  .badge {
+    display: inline-block; border-radius: 100px; padding: 3px 12px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+  }
+  #status-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  /* spinner */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 18px; height: 18px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.7s linear infinite; display: none;
+  }
+  /* error */
+  #error-box {
+    background: rgba(237,74,74,0.1); border: 1px solid rgba(237,74,74,0.3);
+    border-radius: 10px; padding: 12px 16px; font-size: 13px; color: #ee9090;
+    display: none; margin-bottom: 14px; word-break: break-all;
+  }
+  /* model selector */
+  select {
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-family: var(--font);
+    font-size: 13px; padding: 8px 12px; width: 100%; outline: none;
+    appearance: none; cursor: pointer;
+  }
+  select:focus { border-color: var(--accent); }
+  /* top bar */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .back-link {
+    font-size: 13px; color: var(--muted); text-decoration: none;
+    padding: 6px 0;
+  }
+  .back-link:hover { color: var(--text); }
+  .go-no-go {
+    font-size: 13px; font-weight: 700; letter-spacing: 0.06em;
+    padding: 5px 14px; border-radius: 100px;
+  }
+  .go   { background: rgba(74,237,138,0.15); color: var(--green); border: 1px solid rgba(74,237,138,0.3); }
+  .nogo { background: rgba(237,74,74,0.15);  color: var(--red);   border: 1px solid rgba(237,74,74,0.3); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Prompt Tester <small>Phase 1 · go/no-go gate</small></h1>
+  <a href="/" class="back-link">← App</a>
+</div>
+
+<!-- Director -->
+<div class="card">
+  <div class="section-label">Director style</div>
+  <div class="director-grid" id="director-grid">
+    <div class="dir-chip active" data-director="Wes Anderson">Wes Anderson</div>
+    <div class="dir-chip" data-director="Kubrick">Kubrick</div>
+    <div class="dir-chip" data-director="Fincher">Fincher</div>
+    <div class="dir-chip" data-director="Spielberg">Spielberg</div>
+    <div class="dir-chip" data-director="Wong Kar-Wai">Wong Kar-Wai</div>
+    <div class="dir-chip" data-director="none">No style</div>
+  </div>
+</div>
+
+<!-- Photo -->
+<div class="card">
+  <div class="section-label">Test image</div>
+  <div id="photo-wrap">
+    <img id="preview-img" alt="preview">
+    <div class="placeholder" id="photo-placeholder">
+      <strong>📷</strong>Tap to capture or upload a photo
+    </div>
+  </div>
+  <input type="file" id="file-input" accept="image/*" capture="environment">
+</div>
+
+<div class="btn-row">
+  <button class="btn btn-secondary" id="btn-camera">📷 Camera</button>
+  <button class="btn btn-secondary" id="btn-upload">⬆ Upload</button>
+</div>
+
+<!-- Model -->
+<div class="card">
+  <div class="section-label">Model (fast-path)</div>
+  <select id="model-select">
+    <option value="Qwen/Qwen3.6-27B-FP8">Qwen 3.6 27B FP8 (fast)</option>
+    <option value="Qwen/Qwen3.6-35B-A3B-FP8">Qwen 3.6 35B A3B FP8</option>
+    <option value="google/gemma-4-26B-A4B-it">Gemma 4 26B A4B</option>
+  </select>
+</div>
+
+<!-- Analyze button -->
+<button class="btn btn-primary" id="btn-analyze" disabled>Analyze Frame →</button>
+
+<br><br>
+
+<!-- Status -->
+<div id="status-row" style="display:none">
+  <div class="spinner" id="spinner"></div>
+  <span class="badge" id="latency-badge" style="color:var(--green)">– ms</span>
+  <span class="badge go-no-go" id="verdict-badge" style="display:none"></span>
+</div>
+
+<!-- Error -->
+<div id="error-box"></div>
+
+<!-- Cue -->
+<div id="cue-box"></div>
+
+<!-- Score bars -->
+<div id="scores-section" style="display:none">
+  <div class="card">
+    <div class="section-label" style="margin-bottom:14px">Scores</div>
+    <div id="score-bars"></div>
+  </div>
+</div>
+
+<!-- Raw JSON -->
+<div id="raw-json"></div>
+
+<script>
+// ── Director selection ──
+let selectedDirector = "Wes Anderson";
+document.getElementById("director-grid").addEventListener("click", e => {
+  const chip = e.target.closest(".dir-chip");
+  if (!chip) return;
+  document.querySelectorAll(".dir-chip").forEach(c => c.classList.remove("active"));
+  chip.classList.add("active");
+  selectedDirector = chip.dataset.director;
+});
+
+// ── Photo capture / upload ──
+let imageDataUrl = null;
+
+function setImage(dataUrl) {
+  imageDataUrl = dataUrl;
+  const img = document.getElementById("preview-img");
+  img.src = dataUrl;
+  img.style.display = "block";
+  document.getElementById("photo-placeholder").style.display = "none";
+  document.getElementById("btn-analyze").disabled = false;
+}
+
+document.getElementById("photo-wrap").addEventListener("click", () => {
+  document.getElementById("file-input").click();
+});
+
+document.getElementById("btn-camera").addEventListener("click", () => {
+  const input = document.getElementById("file-input");
+  input.setAttribute("capture", "environment");
+  input.click();
+});
+
+document.getElementById("btn-upload").addEventListener("click", () => {
+  const input = document.getElementById("file-input");
+  input.removeAttribute("capture");
+  input.click();
+});
+
+document.getElementById("file-input").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => setImage(ev.target.result);
+  reader.readAsDataURL(file);
+  e.target.value = "";
+});
+
+// ── Composition prompt ──
+const DIRECTOR_PROFILES = {
+  "Wes Anderson":  "Perfect bilateral symmetry, subject dead-center, camera square-on, flat perspective, pastel/warm palette, no dutch tilt.",
+  "Kubrick":       "Strict one-point perspective, vanishing point centered, cold/clinical palette, deep symmetrical corridors or paths.",
+  "Fincher":       "Cold desaturated teal-and-amber palette, precise symmetry or deliberate asymmetry, clinical framing, tension.",
+  "Spielberg":     "Dynamic heroic framing, warm golden light, subject slightly off-center with space ahead, emotional depth.",
+  "Wong Kar-Wai":  "Saturated reds and greens, intimate close framing, shallow depth, slightly off-axis, moody.",
+  "none":          "General good cinematography: balanced composition, level horizon, clear subject.",
+};
+
+function buildPrompt(director) {
+  const profile = DIRECTOR_PROFILES[director] || DIRECTOR_PROFILES["none"];
+  const dirLabel = director === "none" ? "general cinematography" : `${director} style`;
+
+  return `You are a cinematography judge. Evaluate this frame for ${dirLabel}.
+${director !== "none" ? `Style signature: ${profile}` : ""}
+
+Score each criterion 0.0 (fails) to 1.0 (perfect)
+Respond ONLY with this JSON (no markdown, no explanation):
+{"centered":0.0,"symmetric":0.0,"level":0.0,"square_on":0.0,"palette_match":0.0,"composition":0.0,"cue":null}`;
+}
+
+// ── Analyze ──
+document.getElementById("btn-analyze").addEventListener("click", async () => {
+  if (!imageDataUrl) return;
+
+  const model    = document.getElementById("model-select").value;
+  const prompt   = buildPrompt(selectedDirector);
+  const statusRow = document.getElementById("status-row");
+  const spinner  = document.getElementById("spinner");
+  const errBox   = document.getElementById("error-box");
+  const cueBox   = document.getElementById("cue-box");
+  const rawEl    = document.getElementById("raw-json");
+  const scoresEl = document.getElementById("scores-section");
+  const verdict  = document.getElementById("verdict-badge");
+
+  // Reset UI
+  errBox.style.display   = "none";
+  cueBox.style.display   = "none";
+  rawEl.style.display    = "none";
+  scoresEl.style.display = "none";
+  verdict.style.display  = "none";
+  statusRow.style.display = "flex";
+  spinner.style.display   = "block";
+  document.getElementById("btn-analyze").disabled = true;
+
+  const t0 = performance.now();
+
+  try {
+    const body = {
+      model,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "image_url", image_url: { url: imageDataUrl } },
+          { type: "text",      text: prompt },
+        ],
+      }],
+      max_tokens: 120,
+      response_format: { type: "json_object" },
+    };
+
+    const res = await fetch("/api/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const elapsed = Math.round(performance.now() - t0);
+    spinner.style.display = "none";
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`${res.status}: ${txt}`);
+    }
+
+    const data = await res.json();
+
+    // Extract content string
+    const content = data?.choices?.[0]?.message?.content ?? "";
+    let parsed;
+    try {
+      // Strip markdown fences if model ignored the instruction
+      const clean = content.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+      parsed = JSON.parse(clean);
+    } catch {
+      throw new Error("Could not parse JSON from model response:\n" + content);
+    }
+
+    // Latency
+    const inferenceMs = data?.usage?.completion_tokens
+      ? elapsed  // use wall time; Overshoot doesn't expose TTFT in REST
+      : elapsed;
+    const latEl = document.getElementById("latency-badge");
+    latEl.textContent = `${inferenceMs} ms`;
+    latEl.style.color = inferenceMs < 200 ? "var(--green)"
+                      : inferenceMs < 400 ? "var(--accent)" : "var(--red)";
+
+    // Verdict
+    const comp = parsed.composition ?? 0;
+    verdict.style.display = "inline-block";
+    if (comp >= 0.7) {
+      verdict.textContent = "GO ✓";
+      verdict.className = "badge go-no-go go";
+    } else {
+      verdict.textContent = "NO-GO";
+      verdict.className = "badge go-no-go nogo";
+    }
+
+    // Cue
+    if (parsed.cue) {
+      cueBox.innerHTML = `<strong>Coach says:</strong> ${parsed.cue}`;
+      cueBox.style.display = "block";
+    }
+
+    // Score bars
+    const KEYS = ["centered", "symmetric", "level", "square_on", "palette_match", "composition"];
+    const LABELS = {
+      centered: "Centered", symmetric: "Symmetric", level: "Level",
+      square_on: "Square-on", palette_match: "Palette", composition: "Overall",
+    };
+    document.getElementById("score-bars").innerHTML = KEYS.map(k => {
+      const v = parsed[k] ?? 0;
+      const pct = Math.round(v * 100);
+      return `
+        <div class="score-row">
+          <div class="score-key">${LABELS[k]}</div>
+          <div class="score-bar"><div class="score-fill" style="width:${pct}%"></div></div>
+          <div class="score-val">${pct}</div>
+        </div>`;
+    }).join("");
+    scoresEl.style.display = "block";
+
+    // Raw JSON
+    rawEl.textContent = JSON.stringify(parsed, null, 2);
+    rawEl.style.display = "block";
+
+  } catch (err) {
+    spinner.style.display = "none";
+    errBox.textContent = err.message;
+    errBox.style.display = "block";
+  } finally {
+    document.getElementById("btn-analyze").disabled = false;
+  }
+});
+</script>
+</body>
+</html>
