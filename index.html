@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>DP Coach</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0a;
+    --surface: #141414;
+    --border: #2a2a2a;
+    --text: #f0f0f0;
+    --muted: #666;
+    --accent: #e8c84a;
+    --green: #4aed8a;
+    --red: #ed4a4a;
+    --blue: #4a9eed;
+    --radius: 12px;
+    --font: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+  }
+  html, body {
+    height: 100%; background: var(--bg); color: var(--text);
+    font-family: var(--font); overflow: hidden; touch-action: none;
+  }
+
+  /* ── SCREENS ── */
+  .screen {
+    position: absolute; inset: 0;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 24px; gap: 20px;
+    transition: opacity 0.25s;
+  }
+  .screen.active { display: flex; }
+
+  /* ── CAMERA LAYER ── */
+  #camera-bg {
+    position: fixed; inset: 0; z-index: 0;
+    background: #000;
+  }
+  #video {
+    width: 100%; height: 100%;
+    object-fit: cover; opacity: 0;
+    transition: opacity 0.5s;
+  }
+  #video.live { opacity: 1; }
+  #overlay {
+    position: fixed; inset: 0; z-index: 1;
+    background: linear-gradient(to bottom,
+      rgba(0,0,0,0.55) 0%,
+      rgba(0,0,0,0.0) 30%,
+      rgba(0,0,0,0.0) 65%,
+      rgba(0,0,0,0.7) 100%);
+    pointer-events: none;
+  }
+
+  /* ── CARDS / PANELS ── */
+  .card {
+    position: relative; z-index: 2;
+    background: rgba(14,14,14,0.88);
+    backdrop-filter: blur(20px) saturate(1.4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    width: 100%; max-width: 420px;
+  }
+  .card-title {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  /* ── INPUTS ── */
+  textarea, input[type="text"] {
+    width: 100%; background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-family: var(--font); font-size: 16px;
+    padding: 12px 14px; resize: none; outline: none;
+    transition: border-color 0.2s;
+  }
+  textarea:focus, input[type="text"]:focus {
+    border-color: var(--accent);
+  }
+  textarea { min-height: 72px; line-height: 1.5; }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; border: none; border-radius: 100px;
+    font-family: var(--font); font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: transform 0.1s, opacity 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .btn:active { transform: scale(0.96); }
+  .btn-primary {
+    background: var(--accent); color: #000;
+    padding: 14px 32px; width: 100%; max-width: 420px;
+  }
+  .btn-secondary {
+    background: rgba(255,255,255,0.08); color: var(--text);
+    padding: 13px 28px; width: 100%; max-width: 420px;
+    border: 1px solid var(--border);
+  }
+  .btn-danger {
+    background: rgba(237,74,74,0.15); color: var(--red);
+    padding: 13px 28px; width: 100%; max-width: 300px;
+    border: 1px solid rgba(237,74,74,0.3);
+  }
+  .btn-lock {
+    background: rgba(74,158,237,0.15); color: var(--blue);
+    padding: 14px 32px; width: 100%; max-width: 420px;
+    border: 1px solid rgba(74,158,237,0.4);
+    font-size: 17px;
+  }
+
+  /* ── CHIPS (parsed intent display) ── */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    background: rgba(232,200,74,0.12); border: 1px solid rgba(232,200,74,0.3);
+    border-radius: 100px; color: var(--accent);
+    font-size: 12px; font-weight: 600; padding: 4px 12px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ── LATENCY / STATUS BADGE ── */
+  .badge {
+    position: relative; z-index: 10;
+    background: rgba(10,10,10,0.8);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 5px 14px;
+    font-size: 12px; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+  }
+  #latency-badge { color: var(--green); }
+
+  /* ── SCORE BAR ── */
+  .score-bar-wrap {
+    width: 100%; max-width: 420px;
+    position: relative; z-index: 2;
+  }
+  .score-label {
+    font-size: 11px; font-weight: 600; color: var(--muted);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .score-bar {
+    height: 6px; border-radius: 3px;
+    background: rgba(255,255,255,0.08);
+    overflow: hidden;
+  }
+  .score-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(to right, var(--red), var(--accent), var(--green));
+    transition: width 0.35s cubic-bezier(.25,.46,.45,.94);
+    width: 0%;
+  }
+
+  /* ── CUE DISPLAY ── */
+  #cue-display {
+    position: relative; z-index: 10;
+    text-align: center; font-size: 18px; font-weight: 500;
+    color: var(--text); max-width: 320px;
+    min-height: 28px;
+    transition: opacity 0.3s;
+    text-shadow: 0 1px 8px rgba(0,0,0,0.8);
+  }
+
+  /* ── LAND OVERLAY ── */
+  #land-flash {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(74,237,138,0.25);
+    pointer-events: none; opacity: 0;
+    transition: opacity 0.4s;
+  }
+
+  /* ── MOVE SCREEN HUD ── */
+  #move-hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 52px 20px 12px;
+  }
+  #move-hud-bottom {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    z-index: 10;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 16px;
+    padding: 0 20px 40px;
+  }
+
+  /* ── LOCK SCREEN ── */
+  #lock-reticle {
+    position: fixed; inset: 0; z-index: 5;
+    pointer-events: none;
+  }
+  #lock-reticle svg {
+    width: 100%; height: 100%;
+    position: absolute; inset: 0;
+  }
+  .reticle-corner { stroke: var(--blue); stroke-width: 2.5; fill: none; opacity: 0.8; }
+
+  /* ── HINT BOX ── */
+  .hint-box {
+    position: relative; z-index: 2;
+    background: rgba(74,158,237,0.1);
+    border: 1px solid rgba(74,158,237,0.3);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    width: 100%; max-width: 420px;
+    font-size: 15px; line-height: 1.5;
+    color: #b0ccee;
+  }
+  .hint-box strong { color: var(--blue); }
+
+  /* ── MODE INDICATOR ── */
+  #mode-pill {
+    position: fixed; top: 16px; right: 16px; z-index: 20;
+    background: rgba(232,200,74,0.15);
+    border: 1px solid rgba(232,200,74,0.4);
+    border-radius: 100px; padding: 3px 10px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+    color: var(--accent); text-transform: uppercase;
+  }
+
+  /* ── TYPOGRAPHY HELPERS ── */
+  h2 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; text-align: center; z-index: 2; }
+  h2 small { display: block; font-size: 14px; font-weight: 400; color: var(--muted); margin-top: 4px; }
+  p.sub { font-size: 14px; color: var(--muted); text-align: center; z-index: 2; max-width: 300px; }
+</style>
+</head>
+<body>
+
+<div id="camera-bg"><video id="video" autoplay playsinline muted></video></div>
+<div id="overlay"></div>
+<div id="land-flash"></div>
+<div id="mode-pill">MOCK</div>
+
+<!-- ═══════════════════════════════════════════════
+     SCREEN 1: SETUP
+═══════════════════════════════════════════════ -->
+<div id="screen-setup" class="screen active">
+  <h2 style="z-index:2">DP Coach<small>Real-time cinematography · Overshoot AI</small></h2>
+
+  <div class="card" style="z-index:2">
+    <div class="card-title">Describe your shot</div>
+    <textarea id="shot-input" rows="3"
+      placeholder="e.g. Wes Anderson symmetric, slow dolly in&#10;Kubrick one-point perspective&#10;Fincher tension, slow push"></textarea>
+    <div class="chips" id="intent-chips" style="margin-top:10px"></div>
+  </div>
+
+  <button class="btn btn-primary" id="btn-start">Start Camera &amp; Continue →</button>
+  <p class="sub">Camera preview is local · nothing uploads until Lock</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SCREEN 2: LOCK — frame your hero shot
+═══════════════════════════════════════════════ -->
+<div id="screen-lock" class="screen">
+  <div id="lock-reticle">
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+      <!-- corner brackets -->
+      <polyline points="5,15 5,5 15,5" class="reticle-corner"/>
+      <polyline points="85,5 95,5 95,15" class="reticle-corner"/>
+      <polyline points="5,85 5,95 15,95" class="reticle-corner"/>
+      <polyline points="85,95 95,95 95,85" class="reticle-corner"/>
+      <!-- center cross -->
+      <line x1="50" y1="44" x2="50" y2="56" stroke="#4a9eed" stroke-width="1" opacity="0.5"/>
+      <line x1="44" y1="50" x2="56" y2="50" stroke="#4a9eed" stroke-width="1" opacity="0.5"/>
+    </svg>
+  </div>
+
+  <div style="position:fixed; top:0; left:0; right:0; z-index:10;
+    padding: 52px 20px 0; display:flex; flex-direction:column; align-items:center; gap:8px;">
+    <div class="badge" id="lock-intent-badge">–</div>
+  </div>
+
+  <div style="position:fixed; bottom:0; left:0; right:0; z-index:10;
+    padding: 0 20px 40px; display:flex; flex-direction:column; align-items:center; gap:16px;">
+    <p style="font-size:13px; color:rgba(255,255,255,0.5); text-align:center; max-width:280px;">
+      Frame your <strong style="color:#fff">hero shot</strong> — this becomes your locked target
+    </p>
+    <button class="btn btn-lock" id="btn-lock">⬛ Lock Target Frame</button>
+    <button class="btn btn-secondary" id="btn-back-to-setup"
+      style="max-width:180px; font-size:13px; padding:10px 20px;">← Back</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SCREEN 3: START-POSITION HINT + GO
+═══════════════════════════════════════════════ -->
+<div id="screen-hint" class="screen">
+  <h2>Get into position</h2>
+  <div class="hint-box" id="hint-text">
+    Back up until the subject looks comfortably small.
+  </div>
+  <div class="card" style="gap:12px; display:flex; flex-direction:column;">
+    <div class="card-title">Your shot</div>
+    <div class="chips" id="hint-chips"></div>
+  </div>
+  <button class="btn btn-primary" id="btn-go">▶ Go — Start Move</button>
+  <button class="btn btn-danger" id="btn-cancel-hint">✕ Cancel</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SCREEN 4: MOVE — live coaching
+═══════════════════════════════════════════════ -->
+<div id="screen-move" class="screen">
+  <!-- HUD top -->
+  <div id="move-hud">
+    <div class="badge" id="latency-badge">– ms</div>
+    <div class="badge" id="state-badge" style="color:var(--accent)">MOVING</div>
+  </div>
+
+  <!-- Score bars — centered vertically -->
+  <div style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+    z-index:10; width:100%; max-width:400px; padding:0 20px; display:flex; flex-direction:column; gap:14px;">
+    <div class="score-bar-wrap">
+      <div class="score-label">Landing</div>
+      <div class="score-bar"><div class="score-fill" id="bar-landing"></div></div>
+    </div>
+    <div class="score-bar-wrap">
+      <div class="score-label">Composition</div>
+      <div class="score-bar"><div class="score-fill" id="bar-composition"></div></div>
+    </div>
+    <div class="score-bar-wrap">
+      <div class="score-label">Timing</div>
+      <div class="score-bar"><div class="score-fill" id="bar-timing"></div></div>
+    </div>
+  </div>
+
+  <!-- Cue display -->
+  <div id="cue-display" style="position:fixed; bottom:120px; left:50%; transform:translateX(-50%);"></div>
+
+  <!-- Bottom HUD -->
+  <div id="move-hud-bottom">
+    <button class="btn btn-danger" id="btn-stop">⏹ Stop</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SCREEN 5: LAND
+═══════════════════════════════════════════════ -->
+<div id="screen-land" class="screen">
+  <h2 style="color:var(--green)">Landed ✓<small style="color:var(--muted)">Shot complete</small></h2>
+  <div class="card" id="land-summary">
+    <div class="card-title">Session</div>
+    <div id="land-details" style="font-size:14px; line-height:1.8; color:#ccc;"></div>
+  </div>
+  <button class="btn btn-primary" id="btn-new-shot">New Shot →</button>
+</div>
+
+<script type="module">
+// ════════════════════════════════════════════════════════════════
+//  MOCK PROVIDER  (Phase 0 — zero API calls)
+// ════════════════════════════════════════════════════════════════
+const MODE = "mock";
+
+let _tick = 0;
+function cannedResult(intent) {
+  _tick++;
+  const t = _tick;
+  // Simulate gradual landing convergence over ~20 ticks
+  const landing   = Math.min(0.95, (t / 20) * 0.9 + 0.05 + (Math.random() * 0.06 - 0.03));
+  const comp      = 0.55 + Math.sin(t * 0.4) * 0.2 + (Math.random() * 0.08 - 0.04);
+  const timing    = 0.6  + Math.cos(t * 0.3) * 0.15 + (Math.random() * 0.06 - 0.03);
+
+  const dirStyle  = intent.director?.toLowerCase() || "";
+  const moveType  = intent.moveType?.toLowerCase() || "dolly";
+
+  // Cue selection based on scores
+  let cue = null;
+  if (landing < 0.25) {
+    cue = moveType.includes("pan") ? "rotate further away" : "back up more";
+  } else if (comp < 0.45) {
+    const c = dirStyle.includes("wes") ? "center the subject" : "adjust framing";
+    cue = c;
+  } else if (timing < 0.4) {
+    cue = "slow down — revealing too early";
+  } else if (landing > 0.75 && comp < 0.65) {
+    cue = "ease right";
+  } else if (landing > 0.85) {
+    cue = "almost there…";
+  }
+
+  return {
+    landing: clamp(landing, 0, 1),
+    composition: clamp(comp, 0, 1),
+    timing: clamp(timing, 0, 1),
+    cue,
+    latency_ms: 60 + Math.floor(Math.random() * 90),  // simulated 60–150ms
+  };
+}
+
+async function getVisionResult(intent) {
+  if (MODE === "mock") {
+    await new Promise(r => setTimeout(r, 60 + Math.random() * 120));
+    return cannedResult(intent);
+  }
+  // Future: still/live providers
+  throw new Error("Provider not implemented");
+}
+
+
+// ════════════════════════════════════════════════════════════════
+//  INTENT PARSER  (typed text → structured intent)
+// ════════════════════════════════════════════════════════════════
+const DIRECTOR_KEYWORDS = {
+  "wes anderson": { director: "Wes Anderson", composition: "symmetric centered flat", moveHint: "precise reveal" },
+  "kubrick":      { director: "Kubrick",       composition: "one-point perspective", moveHint: "slow menacing push" },
+  "fincher":      { director: "Fincher",        composition: "cold tension symmetry", moveHint: "clinical slow push" },
+  "spielberg":    { director: "Spielberg",      composition: "dynamic heroic framing", moveHint: "emotional dolly" },
+  "wong kar-wai": { director: "Wong Kar-Wai",   composition: "saturated intimate", moveHint: "slow drift" },
+  "noe":          { director: "Gaspar Noé",     composition: "disorienting extreme", moveHint: "aggressive push" },
+};
+
+const MOVE_KEYWORDS = {
+  "dolly in":  "dolly_in",  "push in": "dolly_in",
+  "dolly out": "dolly_out", "pull out": "dolly_out", "pullback": "dolly_out",
+  "pan left":  "pan_left",  "pan right": "pan_right",
+  "pan":       "pan",
+  "track":     "track",     "tracking": "track",
+  "crane":     "crane",     "tilt": "tilt",
+};
+
+function parseIntent(text) {
+  const lower = text.toLowerCase();
+  let director = null, directorInfo = null;
+  for (const [key, val] of Object.entries(DIRECTOR_KEYWORDS)) {
+    if (lower.includes(key)) { director = key; directorInfo = val; break; }
+  }
+
+  let moveType = null;
+  for (const [key, val] of Object.entries(MOVE_KEYWORDS)) {
+    if (lower.includes(key)) { moveType = val; break; }
+  }
+  if (!moveType) moveType = "dolly_in"; // default
+
+  const modifiers = [];
+  if (lower.includes("slow"))  modifiers.push("slow");
+  if (lower.includes("fast"))  modifiers.push("fast");
+  if (lower.includes("handheld")) modifiers.push("handheld");
+  if (lower.includes("smooth")) modifiers.push("smooth");
+
+  return {
+    raw: text,
+    director: directorInfo?.director || null,
+    directorStyle: directorInfo?.composition || null,
+    moveType,
+    modifiers,
+    moveHint: directorInfo?.moveHint || null,
+  };
+}
+
+function moveHintText(intent) {
+  const m = intent.moveType || "dolly_in";
+  if (m === "dolly_in")  return "Step back until the subject looks comfortably small.";
+  if (m === "dolly_out") return "Move close to the subject — push in, then reveal.";
+  if (m.startsWith("pan")) return "Rotate away until your target leaves the frame.";
+  if (m === "track")     return "Step to the side until you're off-angle.";
+  return "Position yourself at your starting point.";
+}
+
+function chipsHTML(intent) {
+  const chips = [];
+  if (intent.director) chips.push(intent.director);
+  chips.push(intent.moveType.replace("_", " "));
+  intent.modifiers.forEach(m => chips.push(m));
+  return chips.map(c => `<span class="chip">${c}</span>`).join("");
+}
+
+
+// ════════════════════════════════════════════════════════════════
+//  STATE MACHINE
+// ════════════════════════════════════════════════════════════════
+// States: SETUP → LOCK → HINT → MOVE → LAND
+let state = "SETUP";
+let intent = null;
+let targetFrameRef = null;  // will hold frame reference after lock
+let moveLoop = null;
+let moveStats = { ticks: 0, startTime: 0, totalLatency: 0 };
+
+function transition(to) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(`screen-${to.toLowerCase()}`).classList.add("active");
+  state = to.toUpperCase();
+}
+
+
+// ════════════════════════════════════════════════════════════════
+//  AUDIO ENGINE
+// ════════════════════════════════════════════════════════════════
+let audioCtx = null;
+let osc = null, panner = null, gainNode = null;
+let speechQueue = [];
+let speechBusy = false;
+let lastSpokenCue = null;
+let lastCueTime = 0;
+const CUE_DEBOUNCE_MS = 3000;
+
+function unlockAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  gainNode = audioCtx.createGain();
+  gainNode.gain.value = 0;
+  panner = audioCtx.createStereoPanner();
+  osc = audioCtx.createOscillator();
+  osc.type = "sine";
+  osc.frequency.value = 220;
+  osc.connect(panner).connect(gainNode).connect(audioCtx.destination);
+  osc.start();
+}
+
+function startTone() {
+  if (!audioCtx) return;
+  gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+  gainNode.gain.setTargetAtTime(0.08, audioCtx.currentTime, 0.05);
+}
+
+function stopTone() {
+  if (!audioCtx) return;
+  gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+  gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.15);
+}
+
+// Map scores → audio params
+// pitch: 180Hz (far) → 520Hz (landed), pan: direction, pulse via gain modulation
+let pulseInterval = null;
+function updateTone(landing, composition, pan = 0) {
+  if (!audioCtx || !osc) return;
+  const freq = 180 + landing * 340;        // 180 → 520 Hz
+  osc.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.08);
+  panner.pan.setTargetAtTime(clamp(pan, -1, 1), audioCtx.currentTime, 0.1);
+
+  // Pulse rate based on distance (far = fast pulse, near = steady)
+  const distance = 1 - landing;
+  clearInterval(pulseInterval);
+  if (distance > 0.3) {
+    const rate = 200 + (1 - distance) * 600; // ms between pulses
+    pulseInterval = setInterval(() => {
+      if (!gainNode) return;
+      gainNode.gain.setTargetAtTime(0.12, audioCtx.currentTime, 0.01);
+      setTimeout(() => gainNode.gain.setTargetAtTime(0.02, audioCtx.currentTime, 0.04), 40);
+    }, rate);
+  }
+}
+
+function playLandChime() {
+  if (!audioCtx) return;
+  stopTone();
+  clearInterval(pulseInterval);
+  const times = [0, 0.15, 0.3, 0.5];
+  const freqs  = [523, 659, 784, 1047];
+  times.forEach((t, i) => {
+    const g = audioCtx.createGain();
+    const o = audioCtx.createOscillator();
+    o.type = "sine"; o.frequency.value = freqs[i];
+    g.gain.setValueAtTime(0.12, audioCtx.currentTime + t);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + t + 0.4);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(audioCtx.currentTime + t);
+    o.stop(audioCtx.currentTime + t + 0.5);
+  });
+}
+
+function speak(text) {
+  if (!window.speechSynthesis) return;
+  const now = Date.now();
+  if (text === lastSpokenCue && now - lastCueTime < CUE_DEBOUNCE_MS) return;
+  lastSpokenCue = text;
+  lastCueTime = now;
+
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.rate = 1.1; utt.pitch = 1.0; utt.volume = 0.85;
+  speechQueue.push(utt);
+  drainSpeech();
+}
+
+function drainSpeech() {
+  if (speechBusy || speechQueue.length === 0) return;
+  speechBusy = true;
+  const utt = speechQueue.shift();
+  utt.onend = utt.onerror = () => { speechBusy = false; drainSpeech(); };
+  window.speechSynthesis.speak(utt);
+}
+
+
+// ════════════════════════════════════════════════════════════════
+//  SMOOTHING BUFFER  (2–3 tick moving average + hysteresis)
+// ════════════════════════════════════════════════════════════════
+const SMOOTH_N = 3;
+const smoothBufs = { landing: [], composition: [], timing: [] };
+
+function smoothPush(key, val) {
+  smoothBufs[key].push(val);
+  if (smoothBufs[key].length > SMOOTH_N) smoothBufs[key].shift();
+  return smoothBufs[key].reduce((a,b) => a+b, 0) / smoothBufs[key].length;
+}
+
+function resetSmooth() {
+  Object.keys(smoothBufs).forEach(k => smoothBufs[k] = []);
+}
+
+
+// ════════════════════════════════════════════════════════════════
+//  SCORE BARS + CUE DISPLAY
+// ════════════════════════════════════════════════════════════════
+function updateBars(smoothed) {
+  document.getElementById("bar-landing").style.width    = (smoothed.landing    * 100) + "%";
+  document.getElementById("bar-composition").style.width= (smoothed.composition* 100) + "%";
+  document.getElementById("bar-timing").style.width     = (smoothed.timing     * 100) + "%";
+}
+
+function updateCue(cue) {
+  const el = document.getElementById("cue-display");
+  if (!cue) { el.textContent = ""; return; }
+  el.textContent = cue;
+  speak(cue);
+}
+
+function updateLatency(ms) {
+  document.getElementById("latency-badge").textContent = `${ms} ms`;
+  const color = ms < 200 ? "var(--green)" : ms < 350 ? "var(--accent)" : "var(--red)";
+  document.getElementById("latency-badge").style.color = color;
+}
+
+
+// ════════════════════════════════════════════════════════════════
+//  CAMERA
+// ════════════════════════════════════════════════════════════════
+let stream = null;
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 854 }, height: { ideal: 480 },
+               facingMode: { ideal: "environment" } },
+      audio: false,
+    });
+    const v = document.getElementById("video");
+    v.srcObject = stream;
+    await v.play();
+    v.classList.add("live");
+  } catch(e) {
+    alert("Camera access denied. Please allow camera and reload.");
+    console.error(e);
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════
+//  MOVE LOOP
+// ════════════════════════════════════════════════════════════════
+const LAND_THRESHOLD = 0.88;
+let loopRunning = false;
+
+async function runMoveLoop() {
+  loopRunning = true;
+  _tick = 0;
+  resetSmooth();
+  moveStats = { ticks: 0, startTime: Date.now(), totalLatency: 0 };
+
+  while (loopRunning) {
+    const t0 = performance.now();
+    const raw = await getVisionResult(intent);
+    const elapsed = performance.now() - t0;
+
+    if (!loopRunning) break;
+
+    const displayLatency = raw.latency_ms ?? Math.round(elapsed);
+    updateLatency(displayLatency);
+    moveStats.ticks++;
+    moveStats.totalLatency += displayLatency;
+
+    const smoothed = {
+      landing:     smoothPush("landing",     raw.landing),
+      composition: smoothPush("composition", raw.composition),
+      timing:      smoothPush("timing",      raw.timing),
+    };
+
+    updateBars(smoothed);
+    updateCue(raw.cue);
+
+    // tone: pan based on comp score deviation (center = 0, off-center = ±)
+    const pan = (raw.composition - 0.5) * -1.4;
+    updateTone(smoothed.landing, smoothed.composition, pan);
+
+    // LAND check
+    if (smoothed.landing >= LAND_THRESHOLD) {
+      loopRunning = false;
+      onLand(smoothed);
+      return;
+    }
+
+    // Self-pacing: await the result (already done), then immediately fire next
+    // Small floor to prevent a pure spin if mock returns instantly
+    await new Promise(r => setTimeout(r, 50));
+  }
+}
+
+function stopMoveLoop() {
+  loopRunning = false;
+  stopTone();
+  clearInterval(pulseInterval);
+  window.speechSynthesis?.cancel();
+}
+
+function onLand(smoothed) {
+  stopTone();
+  clearInterval(pulseInterval);
+  playLandChime();
+  speak("Landed.");
+
+  // Flash green
+  const flash = document.getElementById("land-flash");
+  flash.style.opacity = "1";
+  setTimeout(() => flash.style.opacity = "0", 600);
+
+  // Stats
+  const elapsed = ((Date.now() - moveStats.startTime) / 1000).toFixed(1);
+  const avgLat  = Math.round(moveStats.totalLatency / moveStats.ticks);
+  document.getElementById("land-details").innerHTML =
+    `Duration: <strong>${elapsed}s</strong><br>
+     Ticks: <strong>${moveStats.ticks}</strong><br>
+     Avg latency: <strong>${avgLat} ms</strong><br>
+     Style: <strong>${intent.director || "custom"}</strong>`;
+
+  transition("land");
+}
+
+
+// ════════════════════════════════════════════════════════════════
+//  EVENT WIRING
+// ════════════════════════════════════════════════════════════════
+const shotInput = document.getElementById("shot-input");
+
+// Live parse as user types
+shotInput.addEventListener("input", () => {
+  const text = shotInput.value.trim();
+  if (!text) { document.getElementById("intent-chips").innerHTML = ""; return; }
+  const parsed = parseIntent(text);
+  document.getElementById("intent-chips").innerHTML = chipsHTML(parsed);
+});
+
+// SETUP → LOCK
+document.getElementById("btn-start").addEventListener("click", async () => {
+  unlockAudio();  // user gesture — unlock audio context
+  const text = shotInput.value.trim() || "Wes Anderson symmetric, slow dolly in";
+  intent = parseIntent(text);
+
+  await startCamera();
+  document.getElementById("lock-intent-badge").textContent =
+    (intent.director || "Custom") + " · " + intent.moveType.replace("_"," ");
+  transition("lock");
+});
+
+// LOCK → HINT
+document.getElementById("btn-lock").addEventListener("click", () => {
+  // In base: just store a placeholder ref (Phase 3 will do real frame capture)
+  targetFrameRef = { lockedAt: Date.now(), note: "mock_ref" };
+  document.getElementById("hint-text").textContent = moveHintText(intent);
+  document.getElementById("hint-chips").innerHTML = chipsHTML(intent);
+  transition("hint");
+});
+
+// HINT back button
+document.getElementById("btn-back-to-setup").addEventListener("click", () => {
+  transition("setup");
+});
+
+// HINT → MOVE (Go)
+document.getElementById("btn-go").addEventListener("click", () => {
+  transition("move");
+  startTone();
+  speak("Moving. " + (intent.director ? intent.director + " style." : ""));
+  runMoveLoop();
+});
+
+// HINT cancel
+document.getElementById("btn-cancel-hint").addEventListener("click", () => {
+  transition("setup");
+});
+
+// MOVE stop
+document.getElementById("btn-stop").addEventListener("click", () => {
+  stopMoveLoop();
+  transition("setup");
+  document.getElementById("cue-display").textContent = "";
+  updateBars({ landing:0, composition:0, timing:0 });
+});
+
+// LAND → new shot
+document.getElementById("btn-new-shot").addEventListener("click", () => {
+  _tick = 0;
+  transition("setup");
+  shotInput.value = "";
+  document.getElementById("intent-chips").innerHTML = "";
+  updateBars({ landing:0, composition:0, timing:0 });
+});
+
+// Keyboard shortcut: Enter on setup textarea
+shotInput.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    document.getElementById("btn-start").click();
+  }
+});
+
+// ── Utility ──
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+</script>
+</body>
+</html>
