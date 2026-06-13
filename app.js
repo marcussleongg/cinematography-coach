@@ -437,6 +437,14 @@ JSON only: {"score":0-1,"cue":"phrase"|null}
 cue: speak like a DP guiding framing — natural, varied, max 10 words. Acknowledge when improving. Vary phrasing each response. null only if score>=0.8.`;
 }
 
+function buildPositionPrompt(intent) {
+  const shot = intent.raw || (intent.director ? `${intent.director} style` : "cinematic");
+  const moveType = intent.moveType ? intent.moveType.replace(/_/g, " ") : "camera move";
+  return `Shot: "${shot}". Move: ${moveType}. I'm getting into starting position before executing this move.
+JSON only: {"cue":"phrase"}
+cue: one instruction (max 10 words) on where to physically move to set up the start of this shot. Be specific to what you see in the frame.`;
+}
+
 async function queryScout() {
   if (!streamId) {
     await new Promise(r => setTimeout(r, 1200 + Math.random() * 400));
@@ -501,6 +509,59 @@ function stopScoutLoop() {
   document.getElementById("btn-lock").classList.remove("pulse");
   document.getElementById("scout-cue").textContent = "";
   document.getElementById("bar-scout").style.width = "0%";
+}
+
+
+// ════════════════════════════════════════════════════════════════
+//  POSITION LOOP  (hint screen — live start-position coaching)
+// ════════════════════════════════════════════════════════════════
+let positionRunning = false;
+
+async function runPositionLoop() {
+  positionRunning = true;
+  while (positionRunning) {
+    try {
+      const url = `ovs://streams/${streamId}?frame_index=-1`;
+      const body = {
+        model: MOVE_MODEL,
+        messages: [{ role: "user", content: [
+          { type: "image_url", image_url: { url } },
+          { type: "text", text: buildPositionPrompt(intent) },
+        ]}],
+        max_tokens: 40,
+        response_format: { type: "json_object" },
+      };
+      const r = await fetch("/api/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(`Position query ${r.status}: ${await r.text()}`);
+      const data = await r.json();
+      const content = data?.choices?.[0]?.message?.content ?? "";
+      const clean = content.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+      const parsed = JSON.parse(clean);
+      if (!positionRunning) break;
+      if (parsed.cue) {
+        document.getElementById("hint-text").textContent = parsed.cue;
+        speak(parsed.cue);
+      }
+    } catch (e) {
+      console.warn("Position query failed:", e);
+    }
+    await new Promise(r => setTimeout(r, 2000));
+  }
+}
+
+function stopPositionLoop() {
+  positionRunning = false;
+}
+
+function enterHint() {
+  document.getElementById("hint-text").textContent = moveHintText(intent);
+  document.getElementById("hint-chips").innerHTML = chipsHTML(intent);
+  transition("hint");
+  if (streamId) runPositionLoop();
 }
 
 
@@ -656,9 +717,7 @@ document.getElementById("btn-lock").addEventListener("click", async () => {
     document.getElementById("shot-move-chips").innerHTML = "";
     transition("shot");
   } else {
-    document.getElementById("hint-text").textContent = moveHintText(intent);
-    document.getElementById("hint-chips").innerHTML = chipsHTML(intent);
-    transition("hint");
+    enterHint();
   }
 });
 
@@ -679,9 +738,7 @@ shotMoveInput.addEventListener("keydown", e => {
 document.getElementById("btn-confirm-shot").addEventListener("click", () => {
   const shotText = shotMoveInput.value.trim();
   intent = parseIntent(shotText || "slow dolly in");
-  document.getElementById("hint-text").textContent = moveHintText(intent);
-  document.getElementById("hint-chips").innerHTML = chipsHTML(intent);
-  transition("hint");
+  enterHint();
 });
 document.getElementById("btn-cancel-shot").addEventListener("click", async () => {
   stopMoveLoop();
@@ -692,6 +749,7 @@ document.getElementById("btn-cancel-shot").addEventListener("click", async () =>
 
 // HINT → MOVE
 document.getElementById("btn-go").addEventListener("click", () => {
+  stopPositionLoop();
   transition("move");
   startTone();
   if (streamId && targetFrameRef?.frameIndex != null) setModePill("LIVE", "var(--green)");
@@ -701,6 +759,7 @@ document.getElementById("btn-go").addEventListener("click", () => {
 
 // HINT cancel — abort + delete stream
 document.getElementById("btn-cancel-hint").addEventListener("click", async () => {
+  stopPositionLoop();
   await deleteStream();
   transition("setup");
 });
