@@ -18,10 +18,8 @@ export default async function handler(req, res) {
   const r = await fetch("https://api.overshoot.ai/v1/streams", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({}),
+      Authorization: `Bearer ${key}`
+    }
   });
 
   if (!r.ok) {

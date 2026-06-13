@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>DP Coach · Publish Smoke Test</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0a; --surface: #141414; --border: #2a2a2a;
+    --text: #f0f0f0; --muted: #666; --accent: #e8c84a;
+    --green: #4aed8a; --red: #ed4a4a; --blue: #4a9eed;
+    --radius: 12px;
+    --font: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+  }
+  html, body {
+    min-height: 100%; background: var(--bg); color: var(--text);
+    font-family: var(--font); padding: 24px 16px 48px;
+  }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  h1 { font-size: 20px; font-weight: 700; }
+  h1 small { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 8px; }
+  .back-link { font-size: 13px; color: var(--muted); text-decoration: none; }
+  .back-link:hover { color: var(--text); }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px;
+  }
+  .section-label {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 10px;
+  }
+  /* step rows */
+  .step {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 14px 0; border-bottom: 1px solid var(--border);
+  }
+  .step:last-child { border-bottom: none; padding-bottom: 0; }
+  .step-num {
+    width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+    background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+    color: var(--muted); margin-top: 1px;
+  }
+  .step-num.done  { background: rgba(74,237,138,0.15); border-color: rgba(74,237,138,0.4); color: var(--green); }
+  .step-num.error { background: rgba(237,74,74,0.15);  border-color: rgba(237,74,74,0.4);  color: var(--red); }
+  .step-num.active { background: rgba(232,200,74,0.15); border-color: rgba(232,200,74,0.4); color: var(--accent); }
+  .step-body { flex: 1; min-width: 0; }
+  .step-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .step-detail { font-size: 12px; color: var(--muted); line-height: 1.6; word-break: break-all; }
+  .step-detail.good { color: var(--green); }
+  .step-detail.bad  { color: var(--red); }
+  /* buttons */
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    border: none; border-radius: 100px; font-family: var(--font);
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: transform 0.1s; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.4; pointer-events: none; }
+  .btn-primary  { background: var(--accent); color: #000; padding: 14px 28px; width: 100%; margin-bottom: 10px; }
+  .btn-danger   {
+    background: rgba(237,74,74,0.12); color: var(--red);
+    padding: 13px 28px; width: 100%;
+    border: 1px solid rgba(237,74,74,0.3);
+  }
+  /* camera preview */
+  #video-wrap {
+    width: 100%; aspect-ratio: 16/9; border-radius: 10px;
+    background: #000; overflow: hidden; margin-bottom: 14px;
+    position: relative;
+  }
+  #video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* frame counter */
+  #frame-counter {
+    font-size: 48px; font-weight: 800; font-variant-numeric: tabular-nums;
+    color: var(--green); text-align: center; letter-spacing: -0.02em;
+    margin: 4px 0;
+  }
+  #frame-counter.stale { color: var(--muted); }
+  .stat-row {
+    display: flex; gap: 16px; justify-content: center;
+    font-size: 12px; color: var(--muted); margin-bottom: 4px;
+  }
+  .stat-val { color: var(--text); font-weight: 600; }
+  /* spinner */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+    vertical-align: middle; margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Smoke Test <small>Phase 2 · publish verify</small></h1>
+  <a href="/" class="back-link">← App</a>
+</div>
+
+<!-- Camera preview -->
+<div id="video-wrap">
+  <video id="video" autoplay playsinline muted></video>
+</div>
+
+<!-- Steps card -->
+<div class="card">
+  <div class="section-label">Pipeline steps</div>
+
+  <div class="step" id="step-camera">
+    <div class="step-num" id="num-camera">1</div>
+    <div class="step-body">
+      <div class="step-title">Camera access</div>
+      <div class="step-detail" id="detail-camera">Waiting…</div>
+    </div>
+  </div>
+
+  <div class="step" id="step-stream">
+    <div class="step-num" id="num-stream">2</div>
+    <div class="step-body">
+      <div class="step-title">Create Overshoot stream</div>
+      <div class="step-detail" id="detail-stream">Waiting…</div>
+    </div>
+  </div>
+
+  <div class="step" id="step-publish">
+    <div class="step-num" id="num-publish">3</div>
+    <div class="step-body">
+      <div class="step-title">Publish WebRTC track</div>
+      <div class="step-detail" id="detail-publish">Waiting…</div>
+    </div>
+  </div>
+
+  <div class="step" id="step-frames">
+    <div class="step-num" id="num-frames">4</div>
+    <div class="step-body">
+      <div class="step-title">Frame count rising</div>
+      <div class="step-detail" id="detail-frames">Waiting…</div>
+      <div id="frame-counter" class="stale" style="display:none">0</div>
+      <div class="stat-row" id="stat-row" style="display:none">
+        <span>fps: <span class="stat-val" id="stat-fps">–</span></span>
+        <span>state: <span class="stat-val" id="stat-state">–</span></span>
+        <span>ttl: <span class="stat-val" id="stat-ttl">–</span>s</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="step" id="step-delete">
+    <div class="step-num" id="num-delete">5</div>
+    <div class="step-body">
+      <div class="step-title">Delete stream</div>
+      <div class="step-detail" id="detail-delete">Waiting…</div>
+    </div>
+  </div>
+</div>
+
+<!-- Actions -->
+<button class="btn btn-primary" id="btn-run">▶ Run Smoke Test</button>
+<button class="btn btn-danger"  id="btn-stop" disabled>⏹ Stop &amp; Delete Stream</button>
+
+<script type="module">
+import { Room, createLocalVideoTrack } from "https://esm.sh/livekit-client@2";
+
+// ── state ──
+let streamId   = null;
+let room       = null;
+let pollTimer  = null;
+let prevFrames = 0;
+let risingConfirmed = false;
+
+// ── step helpers ──
+function stepSet(name, status, detail) {
+  const num = document.getElementById(`num-${name}`);
+  num.className = `step-num ${status}`;
+  num.textContent = status === "done" ? "✓" : status === "error" ? "✗" : num.textContent;
+  const d = document.getElementById(`detail-${name}`);
+  d.textContent = detail;
+  d.className = `step-detail${status === "done" ? " good" : status === "error" ? " bad" : ""}`;
+}
+
+function stepSpinner(name, detail) {
+  document.getElementById(`num-${name}`).className = "step-num active";
+  document.getElementById(`detail-${name}`).innerHTML = `<span class="spinner"></span>${detail}`;
+  document.getElementById(`detail-${name}`).className = "step-detail";
+}
+
+// ── camera ──
+async function initCamera() {
+  stepSpinner("camera", "Requesting camera…");
+  const video = document.getElementById("video");
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 854 }, height: { ideal: 480 }, facingMode: { ideal: "environment" } },
+      audio: false,
+    });
+    video.srcObject = stream;
+    await video.play();
+    stepSet("camera", "done", "Camera live ✓");
+    return stream;
+  } catch (e) {
+    stepSet("camera", "error", e.message);
+    throw e;
+  }
+}
+
+// ── create stream ──
+async function createStream() {
+  stepSpinner("stream", "Calling /api/stream…");
+  const r = await fetch("/api/stream", { method: "POST" });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || r.status);
+  if (data.mock) throw new Error("OVERSHOOT_API_KEY not set — add it to .env.local");
+  streamId = data.id;
+  stepSet("stream", "done", `id: ${streamId}`);
+  return data;
+}
+
+// ── publish ──
+async function publishTrack(publishInfo) {
+  stepSpinner("publish", "Connecting to LiveKit…");
+  room = new Room();
+  await room.connect(publishInfo.url, publishInfo.token);
+
+  const track = await createLocalVideoTrack({
+    width: 854, height: 480, frameRate: 15,
+  });
+  await room.localParticipant.publishTrack(track);
+  stepSet("publish", "done", "WebRTC track publishing ✓");
+}
+
+// ── poll frame count ──
+function startPolling() {
+  stepSpinner("frames", "Waiting for frames…");
+  document.getElementById("frame-counter").style.display = "block";
+  document.getElementById("stat-row").style.display      = "flex";
+  prevFrames = 0;
+  risingConfirmed = false;
+
+  pollTimer = setInterval(async () => {
+    if (!streamId) return;
+    try {
+      const r = await fetch(`/api/stream-status?id=${streamId}`);
+      if (!r.ok) return;
+      const data = await r.json();
+
+      const frames = data.retained_frame_count ?? 0;
+      const fps    = data.recent_fps?.toFixed(1) ?? "–";
+      const state  = data.state ?? "–";
+      const ttl    = data.ttl_seconds ?? "–";
+
+      const counter = document.getElementById("frame-counter");
+      counter.textContent = frames;
+      document.getElementById("stat-fps").textContent   = fps;
+      document.getElementById("stat-state").textContent = state;
+      document.getElementById("stat-ttl").textContent   = ttl;
+
+      if (frames > prevFrames && frames > 0) {
+        counter.classList.remove("stale");
+        if (!risingConfirmed) {
+          risingConfirmed = true;
+          stepSet("frames", "done", `Frame count rising ✓ (${frames} frames, ${fps} fps)`);
+          document.getElementById("num-frames").textContent = "✓";
+        }
+      } else {
+        counter.classList.add("stale");
+      }
+      prevFrames = frames;
+    } catch (e) {
+      console.warn("poll error", e);
+    }
+  }, 2000);
+}
+
+// ── delete stream ──
+async function deleteStream() {
+  if (!streamId) return;
+  clearInterval(pollTimer);
+  stepSpinner("delete", "Deleting stream…");
+  try {
+    await fetch(`/api/stream-status?id=${streamId}`, { method: "DELETE" });
+    if (room) { room.disconnect(); room = null; }
+    stepSet("delete", "done", `Stream ${streamId} deleted ✓`);
+    streamId = null;
+  } catch (e) {
+    stepSet("delete", "error", e.message);
+  }
+}
+
+// ── run ──
+document.getElementById("btn-run").addEventListener("click", async () => {
+  document.getElementById("btn-run").disabled  = true;
+  document.getElementById("btn-stop").disabled = false;
+
+  try {
+    await initCamera();
+    const data = await createStream();
+    await publishTrack(data.publish);
+    startPolling();
+  } catch (e) {
+    console.error(e);
+    document.getElementById("btn-run").disabled  = false;
+    document.getElementById("btn-stop").disabled = true;
+  }
+});
+
+// ── stop ──
+document.getElementById("btn-stop").addEventListener("click", async () => {
+  document.getElementById("btn-stop").disabled = true;
+  await deleteStream();
+  document.getElementById("btn-run").disabled = false;
+});
+</script>
+</body>
+</html>

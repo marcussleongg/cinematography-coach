@@ -1,5 +1,4 @@
-// POST /api/renew — renew Overshoot stream lease
-// ⚠ Exact upstream path unverified — confirm before Phase 4
+// POST /api/renew — keepalive for Overshoot stream lease (resets TTL, returns fresh token)
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
@@ -11,8 +10,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ renewed: true, mock: true });
   }
 
-  // TODO: confirm exact renew endpoint from Overshoot docs
-  const r = await fetch(`https://api.overshoot.ai/v1/streams/${id}/renew`, {
+  const r = await fetch(`https://api.overshoot.ai/v1/streams/${id}/keepalive`, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}` },
   });
