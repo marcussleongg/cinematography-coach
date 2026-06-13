@@ -6,28 +6,19 @@ import { Room, LocalVideoTrack } from "https://esm.sh/livekit-client@2";
 const MOVE_MODEL = "Qwen/Qwen3.6-27B-FP8";
 
 let _tick = 0;
-function cannedResult(intent) {
+function cannedResult() {
   _tick++;
   const t = _tick;
   const landing   = Math.min(0.95, (t / 20) * 0.9 + 0.05 + (Math.random() * 0.06 - 0.03));
   const comp      = 0.55 + Math.sin(t * 0.4) * 0.2 + (Math.random() * 0.08 - 0.04);
   const timing    = 0.6  + Math.cos(t * 0.3) * 0.15 + (Math.random() * 0.06 - 0.03);
 
-  const dirStyle  = intent.director?.toLowerCase() || "";
-  const moveType  = intent.moveType?.toLowerCase() || "dolly";
-
   let cue = null;
-  if (landing < 0.25) {
-    cue = moveType.includes("pan") ? "rotate further away" : "back up more";
-  } else if (comp < 0.45) {
-    cue = dirStyle.includes("wes") ? "center the subject" : "adjust framing";
-  } else if (timing < 0.4) {
-    cue = "slow down — revealing too early";
-  } else if (landing > 0.75 && comp < 0.65) {
-    cue = "ease right";
-  } else if (landing > 0.85) {
-    cue = "almost there…";
-  }
+  if (landing < 0.25)                      cue = "back up more";
+  else if (comp < 0.45)                    cue = "adjust framing";
+  else if (timing < 0.4)                   cue = "slow down — revealing too early";
+  else if (landing > 0.75 && comp < 0.65)  cue = "ease right";
+  else if (landing > 0.85)                 cue = "almost there…";
 
   return {
     landing: clamp(landing, 0, 1),
@@ -39,8 +30,7 @@ function cannedResult(intent) {
 }
 
 function buildMovePrompt(intent) {
-  const shot = intent.raw || (intent.director ? `${intent.director} style` : "cinematic");
-  return `Image1=target frame. Image2=live camera. Shot: "${shot}".
+  return `Image1=target frame. Image2=live camera. Shot: "${intent || "cinematic"}".
 JSON only: {"landing":0-1,"composition":0-1,"timing":0-1,"cue":"phrase"|null}
 landing=how close live matches target, 1=match.
 cue: speak like a DP coaching live — natural, varied, max 10 words. Acknowledge progress when improving. Vary phrasing each response. null only if landing>=0.85.`;
@@ -49,7 +39,7 @@ cue: speak like a DP coaching live — natural, varied, max 10 words. Acknowledg
 async function queryOvershoot(intent) {
   const targetUrl = `ovs://streams/${targetFrameRef.streamId}?frame_index=${targetFrameRef.frameIndex}`;
   // we are looking at the last 2 seconds of the stream with fps 2, so 4 frames in total
-  const liveUrl   = `ovs://streams/${streamId}?start_offset_ms=-2000&max_fps=2`;
+  const liveUrl   = `ovs://streams/${streamId}?start_offset_ms=-2000&max_fps=5`;
 
   const body = {
     model: MOVE_MODEL,
@@ -96,89 +86,21 @@ async function getVisionResult(intent) {
       return await queryOvershoot(intent);
     } catch (e) {
       console.warn("Inference failed, using mock fallback:", e);
-      return cannedResult(intent);  // keep loop alive on transient errors
+      return cannedResult();  // keep loop alive on transient errors
     }
   }
   // Mock fallback: no stream or no locked frame yet
   await new Promise(r => setTimeout(r, 60 + Math.random() * 120));
-  return cannedResult(intent);
+  return cannedResult();
 }
 
 
-// ════════════════════════════════════════════════════════════════
-//  INTENT PARSER
-// ════════════════════════════════════════════════════════════════
-const DIRECTOR_KEYWORDS = {
-  "wes anderson": { director: "Wes Anderson", composition: "symmetric centered flat", moveHint: "precise reveal" },
-  "kubrick":      { director: "Kubrick",       composition: "one-point perspective",   moveHint: "slow menacing push" },
-  "fincher":      { director: "Fincher",        composition: "cold tension symmetry",   moveHint: "clinical slow push" },
-  "spielberg":    { director: "Spielberg",      composition: "dynamic heroic framing",  moveHint: "emotional dolly" },
-  "wong kar-wai": { director: "Wong Kar-Wai",   composition: "saturated intimate",      moveHint: "slow drift" },
-  "noe":          { director: "Gaspar Noé",     composition: "disorienting extreme",    moveHint: "aggressive push" },
-};
-
-const MOVE_KEYWORDS = {
-  "dolly in":  "dolly_in",  "push in":   "dolly_in",
-  "dolly out": "dolly_out", "pull out":  "dolly_out", "pullback": "dolly_out",
-  "pan left":  "pan_left",  "pan right": "pan_right",
-  "pan":       "pan",
-  "track":     "track",     "tracking":  "track",
-  "crane":     "crane",     "tilt":      "tilt",
-};
-
-function parseIntent(text) {
-  const lower = text.toLowerCase();
-  let directorInfo = null;
-  for (const [key, val] of Object.entries(DIRECTOR_KEYWORDS)) {
-    if (lower.includes(key)) { directorInfo = val; break; }
-  }
-
-  let moveType = null;
-  for (const [key, val] of Object.entries(MOVE_KEYWORDS)) {
-    if (lower.includes(key)) { moveType = val; break; }
-  }
-  const modifiers = [];
-  if (lower.includes("slow"))     modifiers.push("slow");
-  if (lower.includes("fast"))     modifiers.push("fast");
-  if (lower.includes("handheld")) modifiers.push("handheld");
-  if (lower.includes("smooth"))   modifiers.push("smooth");
-
-  return {
-    raw: text,
-    director:      directorInfo?.director || null,
-    directorStyle: directorInfo?.composition || null,
-    moveType,
-    modifiers,
-    moveHint:      directorInfo?.moveHint || null,
-  };
-}
-
-function moveHintText(intent) {
-  const m = intent.moveType;
-  if (!m)                      return "Get into your starting position for the shot.";
-  if (m === "dolly_in")        return "Step back until the subject looks comfortably small.";
-  if (m === "dolly_out")       return "Move close to the subject — push in, then reveal.";
-  if (m.startsWith("pan"))     return "Rotate away until your target leaves the frame.";
-  if (m === "track")           return "Step to the side until you're off-angle.";
-  return "Position yourself at your starting point.";
-}
-
-function chipsHTML(intent) {
-  const chips = [];
-  if (intent.director) chips.push(intent.director);
-  if (intent.moveType) chips.push(intent.moveType.replace("_", " "));
-  intent.modifiers.forEach(m => chips.push(m));
-  // nothing recognized — surface a snippet of the raw text so the user sees feedback
-  if (chips.length === 0 && intent.raw) chips.push(intent.raw.slice(0, 32));
-  return chips.map(c => `<span class="chip">${c}</span>`).join("");
-}
 
 
 // ════════════════════════════════════════════════════════════════
 //  STATE MACHINE
 // ════════════════════════════════════════════════════════════════
 let state = "SETUP";
-let appMode = null;          // 'discover' | 'shoot'
 let intent = null;
 let discoverIntent = null;
 let targetFrameRef = null;
@@ -200,13 +122,6 @@ let streamId       = null;
 let livekitRoom    = null;
 let keepaliveTimer = null;
 
-function setModePill(text, color) {
-  const pill = document.getElementById("mode-pill");
-  pill.textContent = text;
-  pill.style.color = color || "";
-  pill.style.borderColor = color ? color.replace(")", ", 0.4)").replace("var(", "rgba(") : "";
-}
-
 async function setupStream() {
   try {
     const r = await fetch("/api/stream", { method: "POST" });
@@ -221,7 +136,6 @@ async function setupStream() {
     const track = new LocalVideoTrack(mediaTrack);
     await livekitRoom.localParticipant.publishTrack(track);
 
-    setModePill("STREAM", "var(--green)");
 
     // Keepalive every 120s — resets TTL, returns fresh token
     keepaliveTimer = setInterval(async () => {
@@ -255,7 +169,6 @@ async function deleteStream() {
     await fetch(`/api/stream-status?id=${streamId}`, { method: "DELETE" }).catch(() => {});
     streamId = null;
   }
-  setModePill("MOCK", "");
 }
 
 
@@ -419,28 +332,23 @@ async function startCamera() {
 // ════════════════════════════════════════════════════════════════
 const SCOUT_INTERVAL_MS = 1500;
 const SCOUT_LOCK_THRESHOLD = 0.75;
-let scoutEnabled = false;
 let scoutRunning = false;
 
 function buildDiscoveryPrompt(intent) {
-  const query = intent.raw || "interesting cinematic composition";
-  return `Scene query: "${query}". Scan this frame for shot opportunities.
+  return `Scene query: "${intent || "interesting cinematic composition"}". Scan this frame for shot opportunities.
 JSON only: {"score":0-1,"cue":"phrase"|null}
 score: opportunity richness (0=nothing useful, 1=great setup visible).
 cue: speak like a DP spotting shots — point at specific items or angles, natural varied language, max 12 words. null if score>=0.8.`;
 }
 
 function buildScoutPrompt(intent) {
-  const shot = intent.raw || (intent.director ? `${intent.director} style` : "cinematic");
-  return `Shot intent: "${shot}". Score this frame 0-1 for how well it sets up this shot.
+  return `Shot intent: "${intent || "cinematic"}". Score this frame 0-1 for how well it sets up this shot.
 JSON only: {"score":0-1,"cue":"phrase"|null}
 cue: speak like a DP guiding framing — natural, varied, max 10 words. Acknowledge when improving. Vary phrasing each response. null only if score>=0.8.`;
 }
 
 function buildPositionPrompt(intent) {
-  const shot = intent.raw || (intent.director ? `${intent.director} style` : "cinematic");
-  const moveType = intent.moveType ? intent.moveType.replace(/_/g, " ") : "camera move";
-  return `Shot: "${shot}". Move: ${moveType}. I'm getting into starting position before executing this move.
+  return `Shot: "${intent || "cinematic"}". I'm getting into starting position before executing this move.
 JSON only: {"cue":"phrase"}
 cue: one instruction (max 10 words) on where to physically move to set up the start of this shot. Be specific to what you see in the frame.`;
 }
@@ -558,8 +466,7 @@ function stopPositionLoop() {
 }
 
 function enterHint() {
-  document.getElementById("hint-text").textContent = moveHintText(intent);
-  document.getElementById("hint-chips").innerHTML = chipsHTML(intent);
+  document.getElementById("hint-text").textContent = "Get into your starting position.";
   transition("hint");
   if (streamId) runPositionLoop();
 }
@@ -631,7 +538,7 @@ function onLand(smoothed) {
     `Duration: <strong>${elapsed}s</strong><br>
      Ticks: <strong>${moveStats.ticks}</strong><br>
      Avg latency: <strong>${avgLat} ms</strong><br>
-     Style: <strong>${intent.director || "custom"}</strong>`;
+     Shot: <strong>${intent || "custom"}</strong>`;
 
   transition("land");
 }
@@ -642,52 +549,19 @@ function onLand(smoothed) {
 // ════════════════════════════════════════════════════════════════
 const shotInput = document.getElementById("shot-input");
 
-shotInput.addEventListener("input", () => {
-  const text = shotInput.value.trim();
-  document.getElementById("intent-chips").innerHTML = text ? chipsHTML(parseIntent(text)) : "";
-});
-
 shotInput.addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); document.getElementById("btn-start").click(); }
-});
-
-// MODE SELECT
-function selectMode(mode) {
-  appMode = mode;
-  const isDiscover = mode === "discover";
-  document.getElementById("prompt-label").textContent =
-    isDiscover ? "What are you looking for?" : "Describe your shot";
-  shotInput.placeholder = isDiscover
-    ? "e.g. find spots in this room for a Wes Anderson symmetric shot"
-    : "e.g. Wes Anderson symmetric, slow dolly in";
-  shotInput.value = "";
-  document.getElementById("intent-chips").innerHTML = "";
-  transition("setup");
-}
-document.getElementById("btn-mode-discover").addEventListener("click", () => selectMode("discover"));
-document.getElementById("btn-mode-shoot").addEventListener("click", () => selectMode("shoot"));
-document.getElementById("btn-back-to-mode").addEventListener("click", () => {
-  appMode = null; discoverIntent = null;
-  transition("mode");
 });
 
 // SETUP → LOCK
 document.getElementById("btn-start").addEventListener("click", async () => {
   unlockAudio();
-  if (appMode === "discover") {
-    discoverIntent = parseIntent(shotInput.value.trim() || "interesting cinematic shots");
-    intent = discoverIntent;  // temporary — overwritten on screen-shot confirm
-    scoutEnabled = true;
-  } else {
-    discoverIntent = null;
-    scoutEnabled = false;     // Shoot mode: manual framing, no scout
-    intent = parseIntent(shotInput.value.trim() || "Wes Anderson symmetric, slow dolly in");
-  }
+  discoverIntent = shotInput.value.trim() || "interesting cinematic shots";
+  intent = discoverIntent;
   await startCamera();
   await setupStream();
-  const scoutHud = document.getElementById("scout-hud");
-  scoutHud.style.display = scoutEnabled ? "flex" : "none";
-  if (scoutEnabled) runScoutLoop();
+  document.getElementById("scout-hud").style.display = "flex";
+  runScoutLoop();
   transition("lock");
 });
 
@@ -711,14 +585,8 @@ document.getElementById("btn-lock").addEventListener("click", async () => {
     targetFrameRef = { lockedAt: Date.now(), note: "mock_ref" };
   }
 
-  if (appMode === "discover") {
-    // Let user specify the shot/move before positioning
-    document.getElementById("shot-move-input").value = "";
-    document.getElementById("shot-move-chips").innerHTML = "";
-    transition("shot");
-  } else {
-    enterHint();
-  }
+  document.getElementById("shot-move-input").value = "";
+  transition("shot");
 });
 
 document.getElementById("btn-back-to-setup").addEventListener("click", () => {
@@ -728,23 +596,19 @@ document.getElementById("btn-back-to-setup").addEventListener("click", () => {
 
 // SHOT QUERY (discover mode) → HINT
 const shotMoveInput = document.getElementById("shot-move-input");
-shotMoveInput.addEventListener("input", () => {
-  const text = shotMoveInput.value.trim();
-  document.getElementById("shot-move-chips").innerHTML = text ? chipsHTML(parseIntent(text)) : "";
-});
 shotMoveInput.addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); document.getElementById("btn-confirm-shot").click(); }
 });
 document.getElementById("btn-confirm-shot").addEventListener("click", () => {
   const shotText = shotMoveInput.value.trim();
-  intent = parseIntent(shotText || "slow dolly in");
+  intent = shotText || "slow dolly in";
   enterHint();
 });
 document.getElementById("btn-cancel-shot").addEventListener("click", async () => {
   stopMoveLoop();
   await deleteStream();
-  appMode = null; discoverIntent = null;
-  transition("mode");
+  discoverIntent = null;
+  transition("setup");
 });
 
 // HINT → MOVE
@@ -752,8 +616,7 @@ document.getElementById("btn-go").addEventListener("click", () => {
   stopPositionLoop();
   transition("move");
   startTone();
-  if (streamId && targetFrameRef?.frameIndex != null) setModePill("LIVE", "var(--green)");
-  speak("Moving. " + (intent.director ? intent.director + " style." : ""));
+  speak("Moving.");
   runMoveLoop();
 });
 
@@ -773,14 +636,13 @@ document.getElementById("btn-stop").addEventListener("click", async () => {
   updateBars({ landing: 0, composition: 0, timing: 0 });
 });
 
-// LAND → new shot — return to mode select
+// LAND → new shot
 document.getElementById("btn-new-shot").addEventListener("click", () => {
   _tick = 0;
-  appMode = null; discoverIntent = null;
+  discoverIntent = null;
   shotInput.value = "";
-  document.getElementById("intent-chips").innerHTML = "";
   updateBars({ landing: 0, composition: 0, timing: 0 });
-  transition("mode");
+  transition("setup");
 });
 
 
