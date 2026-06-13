@@ -196,12 +196,31 @@
   #lock-reticle {
     position: fixed; inset: 0; z-index: 5;
     pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
   }
-  #lock-reticle svg {
-    width: 100%; height: 100%;
+  #reticle-grid {
     position: absolute; inset: 0;
+    width: 100%; height: 100%;
   }
-  .reticle-corner { stroke: var(--blue); stroke-width: 2.5; fill: none; opacity: 0.8; }
+  #reticle-cross { flex-shrink: 0; }
+
+  /* ── SCOUT CUE PILL ── */
+  #scout-cue {
+    background: rgba(0,0,0,0.68);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 100px;
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.025em;
+    color: rgba(255,255,255,0.92);
+    text-align: center;
+    transition: opacity 0.25s;
+    align-self: center;
+  }
+  #scout-cue:empty { display: none; }
 
   /* ── HINT BOX ── */
   .hint-box {
@@ -215,6 +234,42 @@
     color: #b0ccee;
   }
   .hint-box strong { color: var(--blue); }
+
+  /* ── MODE SELECT CARDS ── */
+  .mode-cards {
+    display: flex; gap: 14px; width: 100%; max-width: 420px; z-index: 2;
+  }
+  .mode-card {
+    flex: 1; position: relative;
+    background: rgba(14,14,14,0.88);
+    backdrop-filter: blur(20px) saturate(1.4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 16px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    cursor: pointer; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.2s, background 0.2s, transform 0.1s;
+  }
+  .mode-card:active { transform: scale(0.97); }
+  .mode-card.discover { border-color: rgba(74,158,237,0.35); }
+  .mode-card.shoot    { border-color: rgba(232,200,74,0.35); }
+  .mode-card.discover:hover, .mode-card.discover:focus {
+    background: rgba(74,158,237,0.08); border-color: rgba(74,158,237,0.6);
+  }
+  .mode-card.shoot:hover, .mode-card.shoot:focus {
+    background: rgba(232,200,74,0.08); border-color: rgba(232,200,74,0.6);
+  }
+  .mode-icon { font-size: 28px; line-height: 1; }
+  .mode-title {
+    font-size: 13px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .mode-card.discover .mode-title { color: var(--blue); }
+  .mode-card.shoot    .mode-title { color: var(--accent); }
+  .mode-sub {
+    font-size: 12px; color: var(--muted); text-align: center; line-height: 1.4;
+  }
 
   /* ── MODE INDICATOR ── */
   #mode-pill {
@@ -230,6 +285,43 @@
   h2 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; text-align: center; z-index: 2; }
   h2 small { display: block; font-size: 14px; font-weight: 400; color: var(--muted); margin-top: 4px; }
   p.sub { font-size: 14px; color: var(--muted); text-align: center; z-index: 2; max-width: 300px; }
+
+  /* ── TOGGLE SWITCH ── */
+  .toggle-switch {
+    position: relative; display: inline-block;
+    width: 44px; height: 26px; flex-shrink: 0;
+  }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle-thumb {
+    position: absolute; inset: 0;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    transition: background 0.2s, border-color 0.2s;
+    cursor: pointer;
+  }
+  .toggle-thumb::before {
+    content: "";
+    position: absolute; left: 3px; top: 3px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--muted);
+    transition: transform 0.2s, background 0.2s;
+  }
+  .toggle-switch input:checked + .toggle-thumb {
+    background: rgba(232,200,74,0.15);
+    border-color: rgba(232,200,74,0.5);
+  }
+  .toggle-switch input:checked + .toggle-thumb::before {
+    transform: translateX(18px);
+    background: var(--accent);
+  }
+
+  /* ── LOCK BUTTON PULSE ── */
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(74,158,237,0.5); }
+    50%       { box-shadow: 0 0 0 10px rgba(74,158,237,0); }
+  }
+  .btn-lock.pulse { animation: pulse-glow 1.2s ease-in-out infinite; }
 </style>
 </head>
 <body>
@@ -240,15 +332,36 @@
 <div id="mode-pill">MOCK</div>
 
 <!-- ═══════════════════════════════════════════════
+     SCREEN 0: MODE SELECT
+═══════════════════════════════════════════════ -->
+<div id="screen-mode" class="screen active">
+  <h2 style="z-index:2">DP Coach<small>Real-time cinematography · Overshoot AI</small></h2>
+  <p class="sub" style="z-index:2">What would you like to do?</p>
+  <div class="mode-cards">
+    <div class="mode-card discover" id="btn-mode-discover" role="button" tabindex="0">
+      <div class="mode-title">Discover</div>
+      <div class="mode-sub">Sweep the room for shot opportunities</div>
+    </div>
+    <div class="mode-card shoot" id="btn-mode-shoot" role="button" tabindex="0">
+      <div class="mode-title">Shoot</div>
+      <div class="mode-sub">Execute a specific shot with live coaching</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
      SCREEN 1: SETUP
 ═══════════════════════════════════════════════ -->
-<div id="screen-setup" class="screen active">
-  <h2 style="z-index:2">DP Coach<small>Real-time cinematography · Overshoot AI</small></h2>
+<div id="screen-setup" class="screen">
+  <button class="btn btn-secondary" id="btn-back-to-mode"
+    style="position:absolute;top:52px;left:20px;z-index:10;max-width:80px;padding:8px 14px;font-size:13px;">
+    ← Back
+  </button>
 
-  <div class="card" style="z-index:2">
-    <div class="card-title">Describe your shot</div>
+  <div class="card" style="z-index:2;margin-top:40px">
+    <div class="card-title" id="prompt-label">Describe your shot</div>
     <textarea id="shot-input" rows="3"
-      placeholder="e.g. Wes Anderson symmetric, slow dolly in&#10;Kubrick one-point perspective&#10;Fincher tension, slow push"></textarea>
+      placeholder="e.g. Wes Anderson symmetric, slow dolly in"></textarea>
     <div class="chips" id="intent-chips" style="margin-top:10px"></div>
   </div>
 
@@ -261,15 +374,20 @@
 ═══════════════════════════════════════════════ -->
 <div id="screen-lock" class="screen">
   <div id="lock-reticle">
-    <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-      <!-- corner brackets -->
-      <polyline points="5,15 5,5 15,5" class="reticle-corner"/>
-      <polyline points="85,5 95,5 95,15" class="reticle-corner"/>
-      <polyline points="5,85 5,95 15,95" class="reticle-corner"/>
-      <polyline points="85,95 95,95 95,85" class="reticle-corner"/>
-      <!-- center cross -->
-      <line x1="50" y1="44" x2="50" y2="56" stroke="#4a9eed" stroke-width="1" opacity="0.5"/>
-      <line x1="44" y1="50" x2="56" y2="50" stroke="#4a9eed" stroke-width="1" opacity="0.5"/>
+    <!-- Rule of thirds grid (full viewport, non-scaling strokes) -->
+    <svg id="reticle-grid" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <line x1="33.33" y1="0" x2="33.33" y2="100" stroke="rgba(255,255,255,0.18)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+      <line x1="66.67" y1="0" x2="66.67" y2="100" stroke="rgba(255,255,255,0.18)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+      <line x1="0" y1="33.33" x2="100" y2="33.33" stroke="rgba(255,255,255,0.18)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+      <line x1="0" y1="66.67" x2="100" y2="66.67" stroke="rgba(255,255,255,0.18)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+    </svg>
+    <!-- Small centered crosshair -->
+    <svg id="reticle-cross" width="36" height="36" viewBox="0 0 36 36">
+      <line x1="18" y1="4" x2="18" y2="12" stroke="#4a9eed" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+      <line x1="18" y1="24" x2="18" y2="32" stroke="#4a9eed" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+      <line x1="4" y1="18" x2="12" y2="18" stroke="#4a9eed" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+      <line x1="24" y1="18" x2="32" y2="18" stroke="#4a9eed" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+      <circle cx="18" cy="18" r="1.5" fill="#4a9eed" opacity="0.8"/>
     </svg>
   </div>
 
@@ -283,10 +401,32 @@
     <p style="font-size:13px; color:rgba(255,255,255,0.5); text-align:center; max-width:280px;">
       Frame your <strong style="color:#fff">hero shot</strong> — this becomes your locked target
     </p>
+    <div id="scout-hud" style="display:none;flex-direction:column;gap:8px;width:100%;max-width:340px;">
+      <div class="score-bar-wrap" style="max-width:none">
+        <div class="score-label">Composition</div>
+        <div class="score-bar"><div class="score-fill" id="bar-scout"></div></div>
+      </div>
+      <div id="scout-cue"></div>
+    </div>
     <button class="btn btn-lock" id="btn-lock">⬛ Lock Target Frame</button>
     <button class="btn btn-secondary" id="btn-back-to-setup"
       style="max-width:180px; font-size:13px; padding:10px 20px;">← Back</button>
   </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SCREEN 2.5: SHOT QUERY (discover mode only)
+═══════════════════════════════════════════════ -->
+<div id="screen-shot" class="screen">
+  <h2>Now, how do you want to shoot it?<small>Describe your camera move</small></h2>
+  <div class="card" style="z-index:2">
+    <div class="card-title">Shot &amp; move</div>
+    <textarea id="shot-move-input" rows="2"
+      placeholder="e.g. slow dolly in, Wes Anderson push"></textarea>
+    <div class="chips" id="shot-move-chips" style="margin-top:10px"></div>
+  </div>
+  <button class="btn btn-primary" id="btn-confirm-shot">Set Starting Position →</button>
+  <button class="btn btn-danger" id="btn-cancel-shot" style="max-width:220px">✕ Cancel &amp; Start Over</button>
 </div>
 
 <!-- ═══════════════════════════════════════════════
