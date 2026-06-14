@@ -330,7 +330,7 @@ async function startCamera() {
 // ════════════════════════════════════════════════════════════════
 //  SCOUT LOOP
 // ════════════════════════════════════════════════════════════════
-const SCOUT_INTERVAL_MS = 1500;
+const SCOUT_INTERVAL_MS = 500;
 const SCOUT_LOCK_THRESHOLD = 0.75;
 let scoutRunning = false;
 
@@ -457,7 +457,7 @@ async function runPositionLoop() {
     } catch (e) {
       console.warn("Position query failed:", e);
     }
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 1500));
   }
 }
 
@@ -510,7 +510,6 @@ async function runMoveLoop() {
       return;
     }
 
-    await new Promise(r => setTimeout(r, 50));
   }
 }
 
