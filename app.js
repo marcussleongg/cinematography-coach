@@ -270,6 +270,7 @@ function speak(text) {
 // ════════════════════════════════════════════════════════════════
 //  SMOOTHING BUFFER
 // ════════════════════════════════════════════════════════════════
+// smoothing for display of scores on the sliding bars (so there is no jumping from high to low, rather it's a gradual change)
 const SMOOTH_N = 3;
 const smoothBufs = { landing: [], composition: [], timing: [], scout: [] };
 
@@ -371,6 +372,7 @@ async function queryScout() {
         { type: "text", text: discoverIntent ? buildDiscoveryPrompt(discoverIntent) : buildScoutPrompt(intent) },
       ],
     }],
+    // max_tokens to reduce cost and latency
     max_tokens: 40,
     response_format: { type: "json_object" },
   };
@@ -400,6 +402,7 @@ async function runScoutLoop() {
       if (!scoutRunning) break;
       const score = smoothPush("scout", raw.score);
       document.getElementById("bar-scout").style.width = (score * 100) + "%";
+      // could have used the updateCue helper as well, but functionally the same
       document.getElementById("scout-cue").textContent = raw.cue ?? "";
       if (raw.cue) speak(raw.cue);
       document.getElementById("btn-lock").classList.toggle("pulse", score >= SCOUT_LOCK_THRESHOLD);
@@ -451,6 +454,7 @@ async function runPositionLoop() {
       const parsed = JSON.parse(clean);
       if (!positionRunning) break;
       if (parsed.cue) {
+        // could have used the updateCue helper as well, but functionally the same
         document.getElementById("hint-text").textContent = parsed.cue;
         speak(parsed.cue);
       }
@@ -555,8 +559,10 @@ shotInput.addEventListener("keydown", e => {
 // SETUP → LOCK
 document.getElementById("btn-start").addEventListener("click", async () => {
   unlockAudio();
+  // discoverIntent used in runScoutLoop and subsequently queryScout()
+  // should be passing discoverIntent as an argument instead of a global variable
   discoverIntent = shotInput.value.trim() || "interesting cinematic shots";
-  intent = discoverIntent;
+  //intent = discoverIntent;
   await startCamera();
   await setupStream();
   document.getElementById("scout-hud").style.display = "flex";
@@ -574,6 +580,7 @@ document.getElementById("btn-lock").addEventListener("click", async () => {
       targetFrameRef = {
         streamId,
         frameIndex: data.last_frame_index,
+        // don't actually need lockedAt
         lockedAt: Date.now(),
       };
     } catch (e) {
@@ -610,7 +617,7 @@ document.getElementById("btn-cancel-shot").addEventListener("click", async () =>
   transition("setup");
 });
 
-// HINT → MOVE
+// HINT → MOVE (HINT is guidance to start position)
 document.getElementById("btn-go").addEventListener("click", () => {
   stopPositionLoop();
   transition("move");
