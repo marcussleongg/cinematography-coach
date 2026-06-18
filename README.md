@@ -1,3 +1,8 @@
+
+
+https://github.com/user-attachments/assets/645af15d-9fa7-4f82-9055-3d707161268d
+
+
 # Cinematography Coach
 
 Real-time cinematography coaching app built on [Overshoot AI](https://www.overshoot.ai/).
